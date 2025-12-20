@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Coffee, Calendar, Clock, Search, Lock, Palette, Utensils, ShoppingBag } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -266,7 +266,6 @@ function App() {
           {filteredActivities.map((activity) => {
             const status = getActivityStatus(activity);
             const joinedCount = (activity.joined_users || []).length;
-            const isNju = currentTheme === 'nju';
             
             return (
               <div key={activity._id} className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} transition-all hover:shadow-lg hover:-translate-y-1`}>
