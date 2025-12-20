@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp, Trash2, Eraser } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -16,12 +16,13 @@ interface Activity {
   description: string;
   max_people: number;
   min_people?: number;
-  time: string;
+  time: string; // ISO 格式时间字符串
   location: string;
   author: string;
   category: "约饭" | "拼单";
   created_at?: number;
   joined_users: string[];
+  hidden_by?: string[]; // 🆕 新增：被谁隐藏了
 }
 
 // --- 皮肤配置 ---
@@ -112,18 +113,50 @@ function App() {
     return activities.filter(a => a.author === currentUser || (a.joined_users || []).includes(currentUser)).length;
   }, [activities, currentUser]);
 
+  // ⏳ 核心逻辑：判断活动是否过期 (活动时间 + 24小时)
+  const isExpired = (activity: Activity) => {
+    if (!activity.time) return false;
+    // 这里的 activity.time 是类似 "10月20日 18:00" 的中文格式，无法直接解析，
+    // 但我们的 input type="datetime-local" 在存储时最好存 ISO 格式。
+    // *注意*：为了兼容旧数据，这里做个简单处理。如果是新发的，建议后端存时间戳。
+    // 这里我们假设 create-activity 存的是中文，那我们只能用 created_at + 5天来兜底。
+    // 为了更精准，我们在下面 ActivityCard 里，如果活动时间过了，就不在广场显示。
+    
+    // 👇 简化版逻辑：
+    // 如果没有 created_at，默认不过期。
+    // 如果有，超过 5 天（432000000毫秒）算过期。
+    const now = Date.now();
+    const created = activity.created_at || now;
+    const isOld = (now - created) > (5 * 24 * 60 * 60 * 1000); 
+    
+    // 如果有明确的 Date 对象（需要后端配合存时间戳），可以用 eventTime + 24h。
+    // 现阶段我们用 "创建时间 + 5天" 作为广场显示的生命周期。
+    return isOld;
+  };
+
+  // 1. 广场列表：过滤掉过期的 + 过滤掉被我隐藏的
   const squareList = useMemo(() => {
     return activities.filter(activity => {
       const matchSearch = activity.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || activity.category === activeCategory;
-      return matchSearch && matchCategory;
-    });
-  }, [activities, searchTerm, activeCategory]);
+      
+      // 🆕 过滤过期 (5天后消失)
+      const expired = isExpired(activity);
+      
+      // 🆕 过滤被我隐藏的
+      const isHidden = (activity.hidden_by || []).includes(currentUser);
 
+      return matchSearch && matchCategory && !expired && !isHidden;
+    });
+  }, [activities, searchTerm, activeCategory, currentUser]);
+
+  // 2. 我的列表：显示我参与的 - 被我隐藏的 (不考虑过期，因为要留底，除非手动删)
   const myActivities = useMemo(() => {
-    return activities.filter(a => 
-      a.author === currentUser || (a.joined_users || []).includes(currentUser)
-    );
+    return activities.filter(a => {
+      const isRelated = a.author === currentUser || (a.joined_users || []).includes(currentUser);
+      const isHidden = (a.hidden_by || []).includes(currentUser);
+      return isRelated && !isHidden;
+    });
   }, [activities, currentUser]);
 
   const handleSetTheme = (theme: ThemeKey) => {
@@ -159,20 +192,25 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // 🗑️ 新增：删除活动逻辑
   const handleDelete = async (activityId: string) => {
     if (!window.confirm("⚠️ 确定要解散/删除这个活动吗？此操作无法撤销。")) return;
     setIsLoading(true);
     try {
       const res = await cloud.invoke("delete-activity", { activityId, username: currentUser });
-      if (res.ok) { 
-        alert("活动已解散"); 
-        fetchActivities(); 
-      } else { 
-        alert(res.msg); 
-      }
+      if (res.ok) { alert("活动已解散"); fetchActivities(); } else { alert(res.msg); }
     } catch (e) { alert("网络错误"); }
     finally { setIsLoading(false); }
+  };
+
+  // 🧹 🆕 个人清除历史记录 (隐藏活动)
+  const handleHide = async (activityId: string) => {
+    if (!window.confirm("🧹 确定要从历史记录中清除它吗？\n(这不会解散活动，只是你看不见了)")) return;
+    // 前端先乐观更新，不等接口
+    setActivities(prev => prev.map(a => a._id === activityId ? { ...a, hidden_by: [...(a.hidden_by||[]), currentUser] } : a));
+    
+    try {
+      await cloud.invoke("hide-activity", { activityId, username: currentUser });
+    } catch (e) { console.error("清除失败"); fetchActivities(); } // 失败了再拉回原来的
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -195,7 +233,8 @@ function App() {
       location: formData.get('location') as string,
       author: currentUser,
       created_at: Date.now(),
-      joined_users: [currentUser]
+      joined_users: [currentUser],
+      hidden_by: [] // 初始化
     };
     const res = await cloud.invoke("create-activity", newActivity);
     if (res && res.id) { setShowCreateModal(false); fetchActivities(); }
@@ -210,12 +249,12 @@ function App() {
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
   // 🧩 ActivityCard 组件
-  const ActivityCard = ({ activity, showJoinBtn = true }: { activity: Activity, showJoinBtn?: boolean }) => {
+  const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
     const [expanded, setExpanded] = useState(false);
     
     const joined = activity.joined_users || [];
     const isJoined = joined.includes(currentUser);
-    const isAuthor = activity.author === currentUser; // 👑 判断是不是发起者
+    const isAuthor = activity.author === currentUser; 
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
     
@@ -223,32 +262,21 @@ function App() {
     const isLongText = content.length > 50;
     const displayContent = expanded ? content : content.slice(0, 50) + (isLongText ? "..." : "");
 
-    // 🔘 按钮逻辑大升级
+    // 🔘 按钮逻辑
     let btnConfig = { 
       text: "Join", disabled: false, style: `${theme.primary} text-white shadow-md active:scale-95`, onClick: () => handleJoin(activity._id)
     };
 
     if (isAuthor) {
-      // 👑 如果是发起者
       if (isFull) {
-        // 🎉 满员发车！
         btnConfig = { 
-          text: "🚀 全体就绪，发车！", 
-          disabled: false, 
-          style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", 
-          onClick: async () => { alert("好耶！人都齐了，快去联系大家吧！"); } // 这里可以扩展成“复制成员名单”
+          text: "🚀 全体就绪，发车！", disabled: false, style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", 
+          onClick: async () => alert("好耶！人都齐了，快去联系大家吧！") 
         };
       } else {
-        // ⏳ 还没满
-        btnConfig = { 
-          text: "等待加入...", 
-          disabled: true, 
-          style: "bg-gray-100 text-gray-400 cursor-default", 
-          onClick: async () => {} 
-        };
+        btnConfig = { text: "等待加入...", disabled: true, style: "bg-gray-100 text-gray-400 cursor-default", onClick: async () => {} };
       }
     } else {
-      // 👤 如果是普通用户
       if (isJoined) {
         btnConfig = { text: "退出", disabled: false, style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95", onClick: () => handleQuit(activity._id) };
       } else if (isFull) {
@@ -259,14 +287,25 @@ function App() {
     return (
       <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md relative`}>
         
-        {/* 🗑️ 发起者专属删除按钮 (右上角) */}
-        {isAuthor && (
+        {/* 🗑️ 发起者专属删除按钮 (广场模式) */}
+        {isAuthor && showJoinBtn && (
           <button 
             onClick={() => handleDelete(activity._id)}
             className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
           >
             <Trash2 size={16} />
           </button>
+        )}
+
+        {/* 🧹 个人清理按钮 (我的档案模式) */}
+        {showSweepBtn && (
+           <button 
+             onClick={() => handleHide(activity._id)}
+             className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-slate-100 hover:text-black transition-colors"
+             title="从历史记录中移除"
+           >
+             <Eraser size={16} />
+           </button>
         )}
 
         <div className="flex justify-between items-start mb-3 pr-10">
@@ -293,10 +332,17 @@ function App() {
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-bold"><MapPin size={14}/> {activity.location}</div>
+                {/* 广场模式显示 Join 按钮 */}
                 {showJoinBtn && (
                   <button onClick={btnConfig.onClick} disabled={btnConfig.disabled} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnConfig.style}`}>
                     {btnConfig.text}
                   </button>
+                )}
+                {/* 档案模式显示状态文字，或者已结束 */}
+                {!showJoinBtn && (
+                  <div className="text-xs font-bold text-gray-300">
+                    {isExpired(activity) ? "已过期" : "进行中"}
+                  </div>
                 )}
             </div>
         </div>
@@ -374,7 +420,7 @@ function App() {
             </div>
             <div>
               {squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}
-              {squareList.map(activity => <ActivityCard key={activity._id} activity={activity} />)}
+              {squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}
             </div>
           </div>
         )}
@@ -392,7 +438,8 @@ function App() {
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-2">My History</h3>
             <div>
               {myActivities.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">你还没有参加过任何活动</div>}
-              {myActivities.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}
+              {/* ⚠️ 这里开启了 showSweepBtn，并关闭了 Join 按钮（因为是历史记录） */}
+              {myActivities.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}
             </div>
             <div className="mt-12 mb-8 text-center opacity-40">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
@@ -403,12 +450,14 @@ function App() {
         )}
       </main>
 
+      {/* 悬浮发布按钮 */}
       {activeTab === 'square' && (
         <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}>
           <Plus size={28} />
         </button>
       )}
 
+      {/* 底部导航 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}>
           <Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} />
@@ -420,6 +469,7 @@ function App() {
         </button>
       </div>
 
+      {/* 换肤弹窗 */}
       {showThemeModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up">
@@ -440,6 +490,7 @@ function App() {
         </div>
       )}
 
+      {/* 发布弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
            <div className="flex justify-between items-center mb-6 pt-4">
