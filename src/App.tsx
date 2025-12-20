@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp, Trash2, Eraser } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp, Trash2, Eraser, Eye, EyeOff } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -16,13 +16,14 @@ interface Activity {
   description: string;
   max_people: number;
   min_people?: number;
-  time: string; // ISO 格式时间字符串
+  time: string;
   location: string;
   author: string;
   category: "约饭" | "拼单";
   created_at?: number;
   joined_users: string[];
-  hidden_by?: string[]; // 🆕 新增：被谁隐藏了
+  hidden_by?: string[]; 
+  status?: 'active' | 'deleted'; // 🆕 新增状态字段
 }
 
 // --- 皮肤配置 ---
@@ -79,6 +80,9 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
   
+  // 🆕 回收站开关 (只在个人中心有效)
+  const [showHiddenItems, setShowHiddenItems] = useState(false);
+
   const [currentTheme, setCurrentTheme] = useState<ThemeKey>("warm");
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<string>("");
@@ -110,54 +114,49 @@ function App() {
 
   const userActivityCount = useMemo(() => {
     if (!currentUser) return 0;
-    return activities.filter(a => a.author === currentUser || (a.joined_users || []).includes(currentUser)).length;
+    // 统计时排除掉已删除的
+    return activities.filter(a => (a.author === currentUser || (a.joined_users || []).includes(currentUser)) && a.status !== 'deleted').length;
   }, [activities, currentUser]);
 
-  // ⏳ 核心逻辑：判断活动是否过期 (活动时间 + 24小时)
   const isExpired = (activity: Activity) => {
     if (!activity.time) return false;
-    // 这里的 activity.time 是类似 "10月20日 18:00" 的中文格式，无法直接解析，
-    // 但我们的 input type="datetime-local" 在存储时最好存 ISO 格式。
-    // *注意*：为了兼容旧数据，这里做个简单处理。如果是新发的，建议后端存时间戳。
-    // 这里我们假设 create-activity 存的是中文，那我们只能用 created_at + 5天来兜底。
-    // 为了更精准，我们在下面 ActivityCard 里，如果活动时间过了，就不在广场显示。
-    
-    // 👇 简化版逻辑：
-    // 如果没有 created_at，默认不过期。
-    // 如果有，超过 5 天（432000000毫秒）算过期。
     const now = Date.now();
     const created = activity.created_at || now;
-    const isOld = (now - created) > (5 * 24 * 60 * 60 * 1000); 
-    
-    // 如果有明确的 Date 对象（需要后端配合存时间戳），可以用 eventTime + 24h。
-    // 现阶段我们用 "创建时间 + 5天" 作为广场显示的生命周期。
-    return isOld;
+    return (now - created) > (5 * 24 * 60 * 60 * 1000); 
   };
 
-  // 1. 广场列表：过滤掉过期的 + 过滤掉被我隐藏的
+  // 1. 广场列表：严格过滤 (过期、隐藏、已删除的统统不显示)
   const squareList = useMemo(() => {
     return activities.filter(activity => {
       const matchSearch = activity.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || activity.category === activeCategory;
-      
-      // 🆕 过滤过期 (5天后消失)
       const expired = isExpired(activity);
-      
-      // 🆕 过滤被我隐藏的
       const isHidden = (activity.hidden_by || []).includes(currentUser);
+      const isDeleted = activity.status === 'deleted'; // 🆕
 
-      return matchSearch && matchCategory && !expired && !isHidden;
+      return matchSearch && matchCategory && !expired && !isHidden && !isDeleted;
     });
   }, [activities, searchTerm, activeCategory, currentUser]);
 
-  // 2. 我的列表：显示我参与的 - 被我隐藏的 (不考虑过期，因为要留底，除非手动删)
+  // 2. 我的列表：灵活过滤 (支持查看回收站)
   const myActivities = useMemo(() => {
     return activities.filter(a => {
       const isRelated = a.author === currentUser || (a.joined_users || []).includes(currentUser);
       const isHidden = (a.hidden_by || []).includes(currentUser);
-      return isRelated && !isHidden;
+      const isDeleted = a.status === 'deleted';
+      
+      if (!isRelated) return false;
+
+      // 🆕 核心逻辑：如果开启了“显示隐藏”，则显示所有相关的。否则只显示正常的。
+      if (showHiddenItems) {
+        // 显示：正常的 + 被我隐藏的 + 被删除的(我是作者)
+        return true; 
+      } else {
+        // 只显示：正常的 AND 未隐藏的 AND 未删除的
+        return !isHidden && !isDeleted;
+      }
     });
-  }, [activities, currentUser]);
+  }, [activities, currentUser, showHiddenItems]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) {
@@ -192,25 +191,34 @@ function App() {
     finally { setIsLoading(false); }
   };
 
+  // 🗑️ 软删除
   const handleDelete = async (activityId: string) => {
-    if (!window.confirm("⚠️ 确定要解散/删除这个活动吗？此操作无法撤销。")) return;
+    if (!window.confirm("⚠️ 确定要解散活动吗？\n(解散后可以去“我的-回收站”恢复)")) return;
     setIsLoading(true);
     try {
       const res = await cloud.invoke("delete-activity", { activityId, username: currentUser });
-      if (res.ok) { alert("活动已解散"); fetchActivities(); } else { alert(res.msg); }
+      if (res.ok) { alert("活动已移入回收站 🗑️"); fetchActivities(); } else { alert(res.msg); }
     } catch (e) { alert("网络错误"); }
     finally { setIsLoading(false); }
   };
 
-  // 🧹 🆕 个人清除历史记录 (隐藏活动)
+  // 🧹 隐藏 (个人清理)
   const handleHide = async (activityId: string) => {
-    if (!window.confirm("🧹 确定要从历史记录中清除它吗？\n(这不会解散活动，只是你看不见了)")) return;
-    // 前端先乐观更新，不等接口
+    if (!window.confirm("🧹 确定要清除记录吗？\n(你可以随时在“显示隐藏”中找回)")) return;
     setActivities(prev => prev.map(a => a._id === activityId ? { ...a, hidden_by: [...(a.hidden_by||[]), currentUser] } : a));
-    
+    try { await cloud.invoke("hide-activity", { activityId, username: currentUser }); } 
+    catch (e) { console.error(e); fetchActivities(); }
+  };
+
+  // ↩️ 恢复 (后悔药)
+  const handleRestore = async (activityId: string) => {
+    if (!window.confirm("🥰 要恢复这个活动吗？")) return;
+    setIsLoading(true);
     try {
-      await cloud.invoke("hide-activity", { activityId, username: currentUser });
-    } catch (e) { console.error("清除失败"); fetchActivities(); } // 失败了再拉回原来的
+      const res = await cloud.invoke("restore-activity", { activityId, username: currentUser });
+      if (res.ok) { alert("活动已恢复 ✨"); fetchActivities(); } else { alert("恢复失败"); }
+    } catch (e) { alert("网络错误"); }
+    finally { setIsLoading(false); }
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -234,7 +242,8 @@ function App() {
       author: currentUser,
       created_at: Date.now(),
       joined_users: [currentUser],
-      hidden_by: [] // 初始化
+      hidden_by: [],
+      status: 'active'
     };
     const res = await cloud.invoke("create-activity", newActivity);
     if (res && res.id) { setShowCreateModal(false); fetchActivities(); }
@@ -258,21 +267,27 @@ function App() {
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
     
+    // 🆕 状态判断
+    const isDeleted = activity.status === 'deleted';
+    const isHidden = (activity.hidden_by || []).includes(currentUser);
+    const isGhost = isDeleted || isHidden; // 是否是“影子”活动(被删或被藏)
+
     const content = activity.description || "暂无详情";
     const isLongText = content.length > 50;
     const displayContent = expanded ? content : content.slice(0, 50) + (isLongText ? "..." : "");
 
-    // 🔘 按钮逻辑
     let btnConfig = { 
       text: "Join", disabled: false, style: `${theme.primary} text-white shadow-md active:scale-95`, onClick: () => handleJoin(activity._id)
     };
 
-    if (isAuthor) {
+    if (isGhost) {
+       // 👻 如果是回收站里的活动，按钮统一变成恢复
+       btnConfig = { 
+         text: "↩️ 恢复活动", disabled: false, style: "bg-gray-800 text-white shadow-md active:scale-95", onClick: () => handleRestore(activity._id)
+       };
+    } else if (isAuthor) {
       if (isFull) {
-        btnConfig = { 
-          text: "🚀 全体就绪，发车！", disabled: false, style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", 
-          onClick: async () => alert("好耶！人都齐了，快去联系大家吧！") 
-        };
+        btnConfig = { text: "🚀 全体就绪，发车！", disabled: false, style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", onClick: async () => alert("好耶！人都齐了，快去联系大家吧！") };
       } else {
         btnConfig = { text: "等待加入...", disabled: true, style: "bg-gray-100 text-gray-400 cursor-default", onClick: async () => {} };
       }
@@ -285,27 +300,27 @@ function App() {
     }
 
     return (
-      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md relative`}>
+      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""}`}>
         
-        {/* 🗑️ 发起者专属删除按钮 (广场模式) */}
-        {isAuthor && showJoinBtn && (
-          <button 
-            onClick={() => handleDelete(activity._id)}
-            className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
-          >
+        {/* 垃圾桶：只有正常状态 + 发起者 + 广场模式 显示 */}
+        {!isGhost && isAuthor && showJoinBtn && (
+          <button onClick={() => handleDelete(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors">
             <Trash2 size={16} />
           </button>
         )}
 
-        {/* 🧹 个人清理按钮 (我的档案模式) */}
-        {showSweepBtn && (
-           <button 
-             onClick={() => handleHide(activity._id)}
-             className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-slate-100 hover:text-black transition-colors"
-             title="从历史记录中移除"
-           >
+        {/* 扫帚：只有正常状态 + 档案模式 显示 */}
+        {!isGhost && showSweepBtn && (
+           <button onClick={() => handleHide(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-slate-100 hover:text-black transition-colors" title="移除">
              <Eraser size={16} />
            </button>
+        )}
+
+        {/* 恢复提示标签 */}
+        {isGhost && (
+          <div className="absolute top-6 right-6 px-3 py-1 bg-gray-200 text-gray-500 text-xs font-bold rounded-full">
+            {isDeleted ? "已解散" : "已隐藏"}
+          </div>
         )}
 
         <div className="flex justify-between items-start mb-3 pr-10">
@@ -338,11 +353,17 @@ function App() {
                     {btnConfig.text}
                   </button>
                 )}
-                {/* 档案模式显示状态文字，或者已结束 */}
+                {/* 档案模式：如果是回收站显示恢复按钮，否则显示状态 */}
                 {!showJoinBtn && (
-                  <div className="text-xs font-bold text-gray-300">
-                    {isExpired(activity) ? "已过期" : "进行中"}
-                  </div>
+                  <>
+                    {isGhost ? (
+                      <button onClick={btnConfig.onClick} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${btnConfig.style}`}>
+                        {btnConfig.text}
+                      </button>
+                    ) : (
+                      <div className="text-xs font-bold text-gray-300">{isExpired(activity) ? "已过期" : "进行中"}</div>
+                    )}
+                  </>
                 )}
             </div>
         </div>
@@ -352,39 +373,16 @@ function App() {
 
   return (
     <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
-      {/* 登录弹窗 */}
+      {/* 登录弹窗 (省略) */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center relative animate-scale-in">
              <h2 className="text-3xl font-black mb-1">ClubDAO</h2>
              <p className="text-xs text-gray-500 font-bold mb-8 leading-relaxed">南京大学区块链+AI<br/>与金融创新俱乐部 联合开发</p>
-             {loginStep === "inputName" && (
-               <form onSubmit={checkUsername}>
-                 <input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="你的代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
-                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">下一步</button>
-               </form>
-             )}
-             {loginStep === "nameTaken" && (
-               <div className="space-y-4">
-                 <div className="bg-orange-50 text-orange-600 p-4 rounded-xl font-bold text-sm border border-orange-100">⚠️ 昵称 "{loginName}" 已被使用</div>
-                 <button onClick={() => setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">是我，去登录</button>
-                 <button onClick={resetToInputName} className="w-full bg-white text-gray-500 p-4 rounded-xl font-bold border-2 border-gray-100 hover:bg-gray-50 active:scale-95 transition-all">不是我，换个名字</button>
-               </div>
-             )}
-             {loginStep === "inputPassword" && (
-               <form onSubmit={handleLogin}>
-                 <div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="font-bold text-xl">{loginName}</div><div className="w-10"></div></div>
-                 <input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="请输入口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
-                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">登录</button>
-               </form>
-             )}
-             {loginStep === "createAccount" && (
-               <form onSubmit={handleRegister}>
-                 <div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="text-green-600 font-bold">🎉 欢迎新人</div><div className="w-10"></div></div>
-                 <input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设置新口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
-                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">注册并登录</button>
-               </form>
-             )}
+             {loginStep === "inputName" && (<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="你的代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">下一步</button></form>)}
+             {loginStep === "nameTaken" && (<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl font-bold text-sm border border-orange-100">⚠️ 昵称 "{loginName}" 已被使用</div><button onClick={() => setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">是我，去登录</button><button onClick={resetToInputName} className="w-full bg-white text-gray-500 p-4 rounded-xl font-bold border-2 border-gray-100 hover:bg-gray-50 active:scale-95 transition-all">不是我，换个名字</button></div>)}
+             {loginStep === "inputPassword" && (<form onSubmit={handleLogin}><div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="font-bold text-xl">{loginName}</div><div className="w-10"></div></div><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="请输入口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">登录</button></form>)}
+             {loginStep === "createAccount" && (<form onSubmit={handleRegister}><div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="text-green-600 font-bold">🎉 欢迎新人</div><div className="w-10"></div></div><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设置新口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">注册并登录</button></form>)}
              {loginError && <p className="text-red-500 mt-4 font-bold animate-pulse">{loginError}</p>}
           </div>
         </div>
@@ -435,12 +433,24 @@ function App() {
               </div>
               <Zap className="absolute right-[-20px] top-[-20px] opacity-20 rotate-12" size={160} />
             </div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-2">My History</h3>
+            
+            <div className="flex justify-between items-end pl-2 pr-2">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">My History</h3>
+              {/* 👁️ 回收站开关 */}
+              <button 
+                onClick={() => setShowHiddenItems(!showHiddenItems)}
+                className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${showHiddenItems ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-400"}`}
+              >
+                {showHiddenItems ? <><Eye size={12}/> 隐藏已删除</> : <><EyeOff size={12}/> 显示已删除</>}
+              </button>
+            </div>
+            
             <div>
-              {myActivities.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">你还没有参加过任何活动</div>}
-              {/* ⚠️ 这里开启了 showSweepBtn，并关闭了 Join 按钮（因为是历史记录） */}
+              {myActivities.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">干净得像一张白纸</div>}
+              {/* 档案模式下，Join按钮关闭，扫帚按钮开启 */}
               {myActivities.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}
             </div>
+            
             <div className="mt-12 mb-8 text-center opacity-40">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Jointly Developed by</p>
