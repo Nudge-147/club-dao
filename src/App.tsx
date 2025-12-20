@@ -306,28 +306,44 @@ function App() {
     if (!timeString) { alert("⏰ 请填写时间"); return; }
     const dateCheck = new Date(timeString);
     if (isNaN(dateCheck.getTime())) { alert("❌ 时间格式不对"); return; }
+    
+    // 格式化显示时间
     const displayTime = dateCheck.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
 
-    setIsLoading(true);
+    setIsLoading(true); // 🔴 开始转圈
     
-    const newActivity = {
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      category: formData.get('category'),
-      max_people: maxVal,
-      min_people: minVal,
-      time: displayTime, 
-      location: formData.get('location') as string,
-      author: currentUser,
-      created_at: Date.now(),
-      joined_users: [currentUser],
-      hidden_by: [],
-      status: 'active'
-    };
-    const res = await cloud.invoke("create-activity", newActivity);
-    if (res && res.id) { setShowCreateModal(false); fetchActivities(); }
-    else { alert("发布失败"); }
-    setIsLoading(false);
+    try {
+      const newActivity = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        category: formData.get('category'),
+        max_people: maxVal,
+        min_people: minVal,
+        time: displayTime, 
+        location: formData.get('location') as string,
+        author: currentUser,
+        created_at: Date.now(),
+        joined_users: [currentUser],
+        hidden_by: [],
+        status: 'active'
+      };
+
+      // 📡 发送请求
+      const res = await cloud.invoke("create-activity", newActivity);
+      
+      if (res && res.id) { 
+        setShowCreateModal(false); 
+        fetchActivities(); 
+        // 这里的 isLoading(false) 不需要写了，统一交给 finally 处理
+      } else { 
+        alert("发布失败：服务器未返回 ID"); 
+      }
+    } catch (error) {
+      console.error("发布出错:", error);
+      alert("发布遇到问题，请重试 (可能是网络波动或云函数冷启动)");
+    } finally {
+      setIsLoading(false); // 🟢 无论成功还是报错，这里一定会执行，停止转圈！
+    }
   };
 
   const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
