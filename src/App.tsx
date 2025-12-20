@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
-  baseUrl: "https://yqq4612qr7.bja.sealos.run", // ✅ 已改回你的 Sealos 地址
+  baseUrl: "https://yqq4612qr7.bja.sealos.run", 
   getAccessToken: () => localStorage.getItem("access_token") || "",
   environment: EnvironmentType.H5,
 });
@@ -15,6 +15,7 @@ interface Activity {
   title: string;
   description: string;
   max_people: number;
+  min_people?: number; // 🆕 新增
   time: string;
   location: string;
   author: string;
@@ -83,8 +84,10 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState<boolean>(true);
   const [loginName, setLoginName] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginStep, setLoginStep] = useState<"inputName" | "inputPassword" | "createAccount">("inputName");
+  const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
+
+  const theme = THEMES[currentTheme];
 
   useEffect(() => {
     const savedName = localStorage.getItem("club_username");
@@ -133,7 +136,6 @@ function App() {
     setShowThemeModal(false);
   };
 
-  // 🤝 加入活动
   const handleJoin = async (activityId: string) => {
     if (!currentUser) { alert("请先登录"); return; }
     if (!window.confirm("确定加入？")) return;
@@ -146,7 +148,6 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // 👋 [新增] 退出活动
   const handleQuit = async (activityId: string) => {
     if (!window.confirm("确定要退出这个活动吗？😢")) return;
     setIsLoading(true);
@@ -173,6 +174,7 @@ function App() {
       description: formData.get('description') as string,
       category: formData.get('category'),
       max_people: parseInt(formData.get('max_people') as string) || 5,
+      min_people: parseInt(formData.get('min_people') as string) || 1, // 🆕 获取最小人数
       time: displayTime, 
       location: formData.get('location') as string,
       author: currentUser,
@@ -185,42 +187,33 @@ function App() {
     setIsLoading(false);
   };
 
-  const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("inputPassword");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
+  const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
   const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
-  const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setShowLoginModal(true); setLoginStep("inputName"); };
-  
-  const theme = THEMES[currentTheme];
+  const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
+  const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
+  // 🧩 独立的卡片组件：支持“展开/收起”逻辑
   const ActivityCard = ({ activity, showJoinBtn = true }: { activity: Activity, showJoinBtn?: boolean }) => {
+    const [expanded, setExpanded] = useState(false);
+    
     const joined = activity.joined_users || [];
     const isJoined = joined.includes(currentUser);
     const isFull = joined.length >= activity.max_people;
+    const minP = activity.min_people || 1;
     
-    // 🔘 按钮状态机：根据不同情况显示不同按钮
-    let btnConfig = { 
-      text: "Join", 
-      disabled: false, 
-      style: `${theme.primary} text-white shadow-md active:scale-95`,
-      onClick: () => handleJoin(activity._id)
-    };
+    // 📝 详情截断逻辑
+    const content = activity.description || "暂无详情";
+    const isLongText = content.length > 50;
+    const displayContent = expanded ? content : content.slice(0, 50) + (isLongText ? "..." : "");
 
+    let btnConfig = { 
+      text: "Join", disabled: false, style: `${theme.primary} text-white shadow-md active:scale-95`, onClick: () => handleJoin(activity._id)
+    };
     if (isJoined) {
-      // ✅ 如果已加入 -> 变身红色退出按钮
-      btnConfig = { 
-        text: "退出", 
-        disabled: false, 
-        style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95",
-        onClick: () => handleQuit(activity._id)
-      };
+      btnConfig = { text: "退出", disabled: false, style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95", onClick: () => handleQuit(activity._id) };
     } else if (isFull) {
-      // 🈵 如果满员 -> 灰色不可点
-      btnConfig = { 
-        text: "已满员", 
-        disabled: true, 
-        style: "bg-gray-200 text-gray-400 cursor-not-allowed",
-        onClick: async () => {}
-      };
+      btnConfig = { text: "已满员", disabled: true, style: "bg-gray-200 text-gray-400 cursor-not-allowed", onClick: async () => {} };
     }
 
     return (
@@ -230,21 +223,36 @@ function App() {
              <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${activity.category === '约饭' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{activity.category || "约饭"}</span>
           </div>
           <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}>
-            <User size={12} /> {joined.length} / {activity.max_people}
+            <User size={12} /> {joined.length} <span className="opacity-50 mx-1">/</span> {minP === 1 ? activity.max_people : `${minP}-${activity.max_people}`}人
           </span>
         </div>
+
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
-        <p className="text-gray-500 mb-6 text-sm leading-relaxed">{activity.description}</p>
+        
+        {/* 📝 详情区域：点击展开 */}
+        <div className="mb-6 relative">
+          <p 
+            onClick={() => isLongText && setExpanded(!expanded)}
+            className={`text-gray-500 text-sm leading-relaxed whitespace-pre-wrap ${isLongText ? "cursor-pointer hover:text-gray-700" : ""}`}
+          >
+            {displayContent}
+          </p>
+          {isLongText && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} 
+              className={`text-xs font-bold mt-1 flex items-center gap-1 ${theme.primaryText}`}
+            >
+              {expanded ? <><ChevronUp size={12}/> 收起</> : <><ChevronDown size={12}/> 查看更多</>}
+            </button>
+          )}
+        </div>
+
         <div className="flex flex-col gap-3">
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-bold"><MapPin size={14}/> {activity.location}</div>
                 {showJoinBtn && (
-                  <button 
-                    onClick={btnConfig.onClick} 
-                    disabled={btnConfig.disabled} 
-                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnConfig.style}`}
-                  >
+                  <button onClick={btnConfig.onClick} disabled={btnConfig.disabled} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnConfig.style}`}>
                     {btnConfig.text}
                   </button>
                 )}
@@ -256,19 +264,45 @@ function App() {
 
   return (
     <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
+      {/* 登录弹窗 */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center">
+          <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center relative animate-scale-in">
              <h2 className="text-3xl font-black mb-1">ClubDAO</h2>
              <p className="text-xs text-gray-500 font-bold mb-8 leading-relaxed">南京大学区块链+AI<br/>与金融创新俱乐部 联合开发</p>
-             {loginStep==="inputName"&&<form onSubmit={checkUsername}><input value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="你的代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>}
-             {loginStep==="inputPassword"&&<form onSubmit={handleLogin}><div className="font-bold text-xl mb-4">{loginName}</div><input type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>}
-             {loginStep==="createAccount"&&<form onSubmit={handleRegister}><div className="text-green-600 font-bold mb-4">🎉 新人请设置口令</div><input value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设置口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册</button></form>}
-             {loginError&&<p className="text-red-500 mt-2 font-bold">{loginError}</p>}
+             {loginStep === "inputName" && (
+               <form onSubmit={checkUsername}>
+                 <input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="你的代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
+                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">下一步</button>
+               </form>
+             )}
+             {loginStep === "nameTaken" && (
+               <div className="space-y-4">
+                 <div className="bg-orange-50 text-orange-600 p-4 rounded-xl font-bold text-sm border border-orange-100">⚠️ 昵称 "{loginName}" 已被使用</div>
+                 <button onClick={() => setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">是我，去登录</button>
+                 <button onClick={resetToInputName} className="w-full bg-white text-gray-500 p-4 rounded-xl font-bold border-2 border-gray-100 hover:bg-gray-50 active:scale-95 transition-all">不是我，换个名字</button>
+               </div>
+             )}
+             {loginStep === "inputPassword" && (
+               <form onSubmit={handleLogin}>
+                 <div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="font-bold text-xl">{loginName}</div><div className="w-10"></div></div>
+                 <input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="请输入口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
+                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">登录</button>
+               </form>
+             )}
+             {loginStep === "createAccount" && (
+               <form onSubmit={handleRegister}>
+                 <div className="flex items-center justify-between mb-4 px-2"><button type="button" onClick={resetToInputName} className="text-xs font-bold text-gray-400 hover:text-black">← 修改账号</button><div className="text-green-600 font-bold">🎉 欢迎新人</div><div className="w-10"></div></div>
+                 <input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设置新口令" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold outline-none border-2 border-transparent focus:border-black transition-all"/>
+                 <button className="w-full bg-black text-white p-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">注册并登录</button>
+               </form>
+             )}
+             {loginError && <p className="text-red-500 mt-4 font-bold animate-pulse">{loginError}</p>}
           </div>
         </div>
       )}
 
+      {/* 顶部导航 */}
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg transition-colors duration-500 ${theme.primary}`}>C</div>
@@ -327,12 +361,14 @@ function App() {
         )}
       </main>
 
+      {/* 悬浮发布按钮 */}
       {activeTab === 'square' && (
         <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}>
           <Plus size={28} />
         </button>
       )}
 
+      {/* 底部导航 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}>
           <Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} />
@@ -344,6 +380,7 @@ function App() {
         </button>
       </div>
 
+      {/* 换肤弹窗 */}
       {showThemeModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up">
@@ -364,6 +401,7 @@ function App() {
         </div>
       )}
 
+      {/* 发布弹窗 (更新版：带引导和最少人数) */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
            <div className="flex justify-between items-center mb-6 pt-4">
@@ -372,10 +410,36 @@ function App() {
            </div>
            <form onSubmit={handleCreateActivity} className="flex-1 space-y-6 overflow-y-auto pb-20">
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类板块</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div>
-             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" /></div>
+             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label><input type="datetime-local" name="time" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
-             <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">最大人数</label><input type="number" name="max_people" placeholder="5" className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none text-center" /></div></div>
-             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label><textarea name="description" required className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium" /></div>
+             <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div></div>
+             
+             {/* 🆕 人数限制区域 */}
+             <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label>
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span>
+                    <input type="number" name="min_people" placeholder="1" className="w-full bg-transparent font-bold outline-none text-center" />
+                  </div>
+                  <span className="text-gray-300 font-bold">-</span>
+                  <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span>
+                    <input type="number" name="max_people" placeholder="5" className="w-full bg-transparent font-bold outline-none text-center" />
+                  </div>
+                </div>
+             </div>
+
+             {/* 📝 详情区域：非必填 + 引导Placeholder */}
+             <div className="space-y-2">
+               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label>
+               <textarea 
+                 name="description" 
+                 placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." 
+                 className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" 
+               />
+             </div>
+
              <button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button>
            </form>
         </div>
