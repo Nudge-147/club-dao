@@ -23,7 +23,6 @@ interface Activity {
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
-  // 🆕 状态增加 'completed'
   status?: 'active' | 'deleted' | 'completed';
 }
 
@@ -83,6 +82,58 @@ function App() {
   const [showHiddenItems, setShowHiddenItems] = useState(false);
   const [inputTimeStr, setInputTimeStr] = useState("");
 
+  // --- 时间选择器逻辑 START ---
+  const [dateState, setDateState] = useState(() => {
+    const tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1); 
+    return {
+      year: tmr.getFullYear(),
+      month: tmr.getMonth() + 1,
+      day: tmr.getDate(),
+      hour: 0,
+      minute: 0
+    };
+  });
+
+  useEffect(() => {
+    const { year, month, day, hour, minute } = dateState;
+    const f = (n: number) => n.toString().padStart(2, '0'); 
+    // 使用 / 分隔符兼容 iOS
+    const str = `${year}/${f(month)}/${f(day)} ${f(hour)}:${f(minute)}`;
+    setInputTimeStr(str);
+  }, [dateState]);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      const tmr = new Date();
+      tmr.setDate(tmr.getDate() + 1);
+      setDateState({
+        year: tmr.getFullYear(),
+        month: tmr.getMonth() + 1,
+        day: tmr.getDate(),
+        hour: 0,
+        minute: 0
+      });
+    }
+  }, [showCreateModal]);
+
+  const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
+
+  const handleDateChange = (key: keyof typeof dateState, val: string) => {
+    const numVal = parseInt(val);
+    setDateState(prev => {
+      const next = { ...prev, [key]: numVal };
+      if (key === 'year' || key === 'month') {
+        const maxDays = getDaysInMonth(next.year, next.month);
+        if (next.day > maxDays) next.day = maxDays;
+      }
+      return next;
+    });
+  };
+
+  const range = (start: number, end: number) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  // --- 时间选择器逻辑 END ---
+
   const [currentTheme, setCurrentTheme] = useState<ThemeKey>("warm");
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<string>("");
@@ -104,10 +155,6 @@ function App() {
     if (savedTheme && THEMES[savedTheme]) setCurrentTheme(savedTheme);
     fetchActivities();
   }, []);
-
-  useEffect(() => {
-    if (showCreateModal) setInputTimeStr("");
-  }, [showCreateModal]);
 
   const fetchActivities = async () => {
     try {
@@ -188,7 +235,6 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // ✅ 切换完成状态 (完成 <-> 进行中)
   const handleToggleComplete = async (activityId: string, currentStatus: string) => {
     const isCompleting = currentStatus !== 'completed';
     const actionName = isCompleting ? "🎉 确认成团/完成活动？" : "↩️ 确定要撤回完成状态，继续招人吗？";
@@ -199,7 +245,6 @@ function App() {
     try {
       const res = await cloud.invoke("toggle-complete", { activityId, username: currentUser });
       if (res.ok) { 
-        // 乐观更新
         setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: res.status } : a));
       } else { 
         alert(res.msg); 
@@ -243,13 +288,6 @@ function App() {
       if (res.ok) { alert("活动已恢复"); fetchActivities(); } else { alert("失败"); }
     } catch (e) { alert("网络错误"); }
     finally { setIsLoading(false); }
-  };
-
-  const handleDatePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value; 
-    if (!val) return;
-    const readable = val.replace("T", " "); 
-    setInputTimeStr(readable);
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -307,13 +345,12 @@ function App() {
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
     
-    // 状态判定
     const isDeleted = activity.status === 'deleted';
-    const isCompleted = activity.status === 'completed'; // ✅ 新增状态
+    const isCompleted = activity.status === 'completed'; 
     const isHidden = (activity.hidden_by || []).includes(currentUser);
     const isGhost = isDeleted || isHidden;
     const hasOthers = joined.length > 1;
-    const canFinish = joined.length >= minP; // 🆕 是否达到最低人数
+    const canFinish = joined.length >= minP;
 
     const content = activity.description || "暂无详情";
     const isLongText = content.length > 50;
@@ -328,21 +365,16 @@ function App() {
     } else if (isDeleted) {
        btnConfig = { text: "🚫 已解散", disabled: true, style: "bg-red-50 text-red-500 cursor-not-allowed", onClick: async () => {} };
     } else if (isCompleted) {
-       // ✅ 如果活动已完成
        if (isAuthor) {
-         // 👑 团长可以撤回
          btnConfig = { 
            text: "↩️ 撤回完成 (继续招人)", disabled: false, style: "bg-yellow-400 text-yellow-900 shadow-md active:scale-95 font-bold", 
            onClick: () => handleToggleComplete(activity._id, 'completed') 
          };
        } else {
-         // 👤 成员看到完成
          btnConfig = { text: "🎉 组局成功", disabled: true, style: "bg-green-100 text-green-600 font-bold border border-green-200", onClick: async () => {} };
        }
     } else if (isAuthor) {
-      // 👑 团长在活动进行中
       if (canFinish) {
-        // 达到最低人数，可以点击完成
         const isMax = joined.length >= activity.max_people;
         btnConfig = { 
           text: isMax ? "✅ 人齐了，发车！" : "✅ 提前成团 / 标记完成", 
@@ -351,11 +383,9 @@ function App() {
           onClick: () => handleToggleComplete(activity._id, 'active') 
         };
       } else {
-        // 人数不够
         btnConfig = { text: `还差 ${minP - joined.length} 人成团...`, disabled: true, style: "bg-gray-100 text-gray-400 cursor-default", onClick: async () => {} };
       }
     } else {
-      // 👤 普通成员
       if (isJoined) {
         btnConfig = { text: "退出", disabled: false, style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95", onClick: () => handleQuit(activity._id) };
       } else if (isFull) {
@@ -454,7 +484,115 @@ function App() {
       {activeTab === 'square' && (<button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20"><button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button><button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'profile' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'profile' ? 3 : 2} /><span className="text-[10px] font-bold">我的</span></button></div>
       {showThemeModal && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up"><h3 className="text-xl font-black mb-6 text-center">选择界面风格</h3><div className="grid grid-cols-3 gap-4"><button onClick={() => handleSetTheme("warm")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='warm'?'border-orange-500 bg-orange-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-orange-500 shadow-md"></div><span className="text-xs font-bold">暖阳橙</span></button><button onClick={() => handleSetTheme("cool")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='cool'?'border-blue-500 bg-blue-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-blue-500 shadow-md"></div><span className="text-xs font-bold">清凉蓝</span></button><button onClick={() => handleSetTheme("nju")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='nju'?'border-purple-800 bg-purple-50':'border-transparent bg-gray-50'} relative overflow-hidden`}><div className="w-8 h-8 rounded-full bg-[#6A005F] shadow-md flex items-center justify-center">{userActivityCount < 10 && <Lock size={14} className="text-white/50"/>}</div><span className="text-xs font-bold text-[#6A005F]">南大紫</span></button></div><button onClick={() => setShowThemeModal(false)} className="w-full mt-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">关闭</button></div></div>)}
-      {showCreateModal && (<div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col"><div className="flex justify-between items-center mb-6 pt-4"><h2 className="text-3xl font-black">发布活动</h2><button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button></div><form onSubmit={handleCreateActivity} className="flex-1 space-y-6 overflow-y-auto pb-20"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类板块</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label><div className="flex gap-2"><div className="relative flex-1"><input value={inputTimeStr} onChange={(e) => setInputTimeStr(e.target.value)} placeholder="YYYY-MM-DD HH:mm" className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none text-base"/><div className="absolute right-0 top-0 bottom-0 flex items-center pr-2 pointer-events-none"></div></div><div className="relative"><button type="button" className="bg-black text-white w-14 h-full rounded-2xl flex items-center justify-center active:scale-90 transition-all"><Calendar size={20}/></button><input type="datetime-local" onChange={handleDatePickerChange} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"/></div></div><div className="text-[10px] text-gray-400 pl-1 font-bold">支持手写或点击右侧日历图标选择</div></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div></div><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label><textarea name="description" placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" /></div><button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button></form></div>)}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
+          <div className="flex justify-between items-center mb-6 pt-4">
+            <h2 className="text-3xl font-black">发布活动</h2>
+            <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button>
+          </div>
+          <form onSubmit={handleCreateActivity} className="flex-1 space-y-6 overflow-y-auto pb-20">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类板块</label>
+              <div className="flex gap-4">
+                <label className="flex-1 cursor-pointer">
+                  <input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" />
+                  <div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div>
+                </label>
+                <label className="flex-1 cursor-pointer">
+                  <input type="radio" name="category" value="拼单" className="peer hidden" />
+                  <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label>
+              <input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-[1.2]">
+                  <select
+                    value={dateState.year}
+                    onChange={(e) => handleDateChange('year', e.target.value)}
+                    className="w-full appearance-none bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {range(2025, 2030).map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div className="relative flex-1">
+                  <select
+                    value={dateState.month}
+                    onChange={(e) => handleDateChange('month', e.target.value)}
+                    className="w-full appearance-none bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {range(1, 12).map(m => <option key={m} value={m}>{m}月</option>)}
+                  </select>
+                </div>
+                <div className="relative flex-1">
+                  <select
+                    value={dateState.day}
+                    onChange={(e) => handleDateChange('day', e.target.value)}
+                    className="w-full appearance-none bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => (
+                      <option key={d} value={d}>{d}日</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-gray-300 font-bold">-</span>
+                <div className="relative flex-1">
+                  <select
+                    value={dateState.hour}
+                    onChange={(e) => handleDateChange('hour', e.target.value)}
+                    className="w-full appearance-none bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {range(0, 23).map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}
+                  </select>
+                </div>
+                <span className="text-gray-300 font-bold">:</span>
+                <div className="relative flex-1">
+                  <select
+                    value={dateState.minute}
+                    onChange={(e) => handleDateChange('minute', e.target.value)}
+                    className="w-full appearance-none bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none focus:ring-2 focus:ring-black/5"
+                  >
+                    {range(0, 59).map(m => (
+                      <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="text-[10px] text-gray-400 pl-1 font-bold">点击上方数字即可滑动选择</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label>
+                <input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label>
+              <div className="flex gap-4 items-center">
+                <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+                  <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span>
+                  <input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" />
+                </div>
+                <span className="text-gray-300 font-bold">-</span>
+                <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+                  <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span>
+                  <input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label>
+              <textarea name="description" placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" />
+            </div>
+            <button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
