@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -15,7 +15,7 @@ interface Activity {
   title: string;
   description: string;
   max_people: number;
-  min_people?: number; // 🆕 新增
+  min_people?: number;
   time: string;
   location: string;
   author: string;
@@ -159,6 +159,22 @@ function App() {
     finally { setIsLoading(false); }
   };
 
+  // 🗑️ 新增：删除活动逻辑
+  const handleDelete = async (activityId: string) => {
+    if (!window.confirm("⚠️ 确定要解散/删除这个活动吗？此操作无法撤销。")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("delete-activity", { activityId, username: currentUser });
+      if (res.ok) { 
+        alert("活动已解散"); 
+        fetchActivities(); 
+      } else { 
+        alert(res.msg); 
+      }
+    } catch (e) { alert("网络错误"); }
+    finally { setIsLoading(false); }
+  };
+
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -174,7 +190,7 @@ function App() {
       description: formData.get('description') as string,
       category: formData.get('category'),
       max_people: parseInt(formData.get('max_people') as string) || 5,
-      min_people: parseInt(formData.get('min_people') as string) || 1, // 🆕 获取最小人数
+      min_people: parseInt(formData.get('min_people') as string) || 1,
       time: displayTime, 
       location: formData.get('location') as string,
       author: currentUser,
@@ -193,32 +209,67 @@ function App() {
   const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
-  // 🧩 独立的卡片组件：支持“展开/收起”逻辑
+  // 🧩 ActivityCard 组件
   const ActivityCard = ({ activity, showJoinBtn = true }: { activity: Activity, showJoinBtn?: boolean }) => {
     const [expanded, setExpanded] = useState(false);
     
     const joined = activity.joined_users || [];
     const isJoined = joined.includes(currentUser);
+    const isAuthor = activity.author === currentUser; // 👑 判断是不是发起者
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
     
-    // 📝 详情截断逻辑
     const content = activity.description || "暂无详情";
     const isLongText = content.length > 50;
     const displayContent = expanded ? content : content.slice(0, 50) + (isLongText ? "..." : "");
 
+    // 🔘 按钮逻辑大升级
     let btnConfig = { 
       text: "Join", disabled: false, style: `${theme.primary} text-white shadow-md active:scale-95`, onClick: () => handleJoin(activity._id)
     };
-    if (isJoined) {
-      btnConfig = { text: "退出", disabled: false, style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95", onClick: () => handleQuit(activity._id) };
-    } else if (isFull) {
-      btnConfig = { text: "已满员", disabled: true, style: "bg-gray-200 text-gray-400 cursor-not-allowed", onClick: async () => {} };
+
+    if (isAuthor) {
+      // 👑 如果是发起者
+      if (isFull) {
+        // 🎉 满员发车！
+        btnConfig = { 
+          text: "🚀 全体就绪，发车！", 
+          disabled: false, 
+          style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", 
+          onClick: async () => { alert("好耶！人都齐了，快去联系大家吧！"); } // 这里可以扩展成“复制成员名单”
+        };
+      } else {
+        // ⏳ 还没满
+        btnConfig = { 
+          text: "等待加入...", 
+          disabled: true, 
+          style: "bg-gray-100 text-gray-400 cursor-default", 
+          onClick: async () => {} 
+        };
+      }
+    } else {
+      // 👤 如果是普通用户
+      if (isJoined) {
+        btnConfig = { text: "退出", disabled: false, style: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 active:scale-95", onClick: () => handleQuit(activity._id) };
+      } else if (isFull) {
+        btnConfig = { text: "已满员", disabled: true, style: "bg-gray-200 text-gray-400 cursor-not-allowed", onClick: async () => {} };
+      }
     }
 
     return (
-      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md`}>
-        <div className="flex justify-between items-start mb-3">
+      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md relative`}>
+        
+        {/* 🗑️ 发起者专属删除按钮 (右上角) */}
+        {isAuthor && (
+          <button 
+            onClick={() => handleDelete(activity._id)}
+            className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+
+        <div className="flex justify-between items-start mb-3 pr-10">
           <div className="flex gap-2 items-center mb-1">
              <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${activity.category === '约饭' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{activity.category || "约饭"}</span>
           </div>
@@ -229,19 +280,10 @@ function App() {
 
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
         
-        {/* 📝 详情区域：点击展开 */}
         <div className="mb-6 relative">
-          <p 
-            onClick={() => isLongText && setExpanded(!expanded)}
-            className={`text-gray-500 text-sm leading-relaxed whitespace-pre-wrap ${isLongText ? "cursor-pointer hover:text-gray-700" : ""}`}
-          >
-            {displayContent}
-          </p>
+          <p onClick={() => isLongText && setExpanded(!expanded)} className={`text-gray-500 text-sm leading-relaxed whitespace-pre-wrap ${isLongText ? "cursor-pointer hover:text-gray-700" : ""}`}>{displayContent}</p>
           {isLongText && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} 
-              className={`text-xs font-bold mt-1 flex items-center gap-1 ${theme.primaryText}`}
-            >
+            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className={`text-xs font-bold mt-1 flex items-center gap-1 ${theme.primaryText}`}>
               {expanded ? <><ChevronUp size={12}/> 收起</> : <><ChevronDown size={12}/> 查看更多</>}
             </button>
           )}
@@ -361,14 +403,12 @@ function App() {
         )}
       </main>
 
-      {/* 悬浮发布按钮 */}
       {activeTab === 'square' && (
         <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}>
           <Plus size={28} />
         </button>
       )}
 
-      {/* 底部导航 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}>
           <Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} />
@@ -380,7 +420,6 @@ function App() {
         </button>
       </div>
 
-      {/* 换肤弹窗 */}
       {showThemeModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up">
@@ -401,7 +440,6 @@ function App() {
         </div>
       )}
 
-      {/* 发布弹窗 (更新版：带引导和最少人数) */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
            <div className="flex justify-between items-center mb-6 pt-4">
@@ -413,33 +451,8 @@ function App() {
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label><input type="datetime-local" name="time" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
              <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div></div>
-             
-             {/* 🆕 人数限制区域 */}
-             <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label>
-                <div className="flex gap-4 items-center">
-                  <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-                    <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span>
-                    <input type="number" name="min_people" placeholder="1" className="w-full bg-transparent font-bold outline-none text-center" />
-                  </div>
-                  <span className="text-gray-300 font-bold">-</span>
-                  <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-                    <span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span>
-                    <input type="number" name="max_people" placeholder="5" className="w-full bg-transparent font-bold outline-none text-center" />
-                  </div>
-                </div>
-             </div>
-
-             {/* 📝 详情区域：非必填 + 引导Placeholder */}
-             <div className="space-y-2">
-               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label>
-               <textarea 
-                 name="description" 
-                 placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." 
-                 className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" 
-               />
-             </div>
-
+             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span><input type="number" name="min_people" placeholder="1" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span><input type="number" name="max_people" placeholder="5" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
+             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label><textarea name="description" placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" /></div>
              <button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button>
            </form>
         </div>
