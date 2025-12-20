@@ -23,7 +23,7 @@ interface Activity {
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
-  status?: 'active' | 'deleted'; // 🆕 新增状态字段
+  status?: 'active' | 'deleted';
 }
 
 // --- 皮肤配置 ---
@@ -79,8 +79,6 @@ function App() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
-  
-  // 🆕 回收站开关 (只在个人中心有效)
   const [showHiddenItems, setShowHiddenItems] = useState(false);
 
   const [currentTheme, setCurrentTheme] = useState<ThemeKey>("warm");
@@ -114,7 +112,6 @@ function App() {
 
   const userActivityCount = useMemo(() => {
     if (!currentUser) return 0;
-    // 统计时排除掉已删除的
     return activities.filter(a => (a.author === currentUser || (a.joined_users || []).includes(currentUser)) && a.status !== 'deleted').length;
   }, [activities, currentUser]);
 
@@ -125,20 +122,18 @@ function App() {
     return (now - created) > (5 * 24 * 60 * 60 * 1000); 
   };
 
-  // 1. 广场列表：严格过滤 (过期、隐藏、已删除的统统不显示)
   const squareList = useMemo(() => {
     return activities.filter(activity => {
       const matchSearch = activity.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || activity.category === activeCategory;
       const expired = isExpired(activity);
       const isHidden = (activity.hidden_by || []).includes(currentUser);
-      const isDeleted = activity.status === 'deleted'; // 🆕
+      const isDeleted = activity.status === 'deleted';
 
       return matchSearch && matchCategory && !expired && !isHidden && !isDeleted;
     });
   }, [activities, searchTerm, activeCategory, currentUser]);
 
-  // 2. 我的列表：灵活过滤 (支持查看回收站)
   const myActivities = useMemo(() => {
     return activities.filter(a => {
       const isRelated = a.author === currentUser || (a.joined_users || []).includes(currentUser);
@@ -146,13 +141,9 @@ function App() {
       const isDeleted = a.status === 'deleted';
       
       if (!isRelated) return false;
-
-      // 🆕 核心逻辑：如果开启了“显示隐藏”，则显示所有相关的。否则只显示正常的。
       if (showHiddenItems) {
-        // 显示：正常的 + 被我隐藏的 + 被删除的(我是作者)
         return true; 
       } else {
-        // 只显示：正常的 AND 未隐藏的 AND 未删除的
         return !isHidden && !isDeleted;
       }
     });
@@ -191,7 +182,6 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // 🗑️ 软删除
   const handleDelete = async (activityId: string) => {
     if (!window.confirm("⚠️ 确定要解散活动吗？\n(解散后可以去“我的-回收站”恢复)")) return;
     setIsLoading(true);
@@ -202,7 +192,6 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // 🧹 隐藏 (个人清理)
   const handleHide = async (activityId: string) => {
     if (!window.confirm("🧹 确定要清除记录吗？\n(你可以随时在“显示隐藏”中找回)")) return;
     setActivities(prev => prev.map(a => a._id === activityId ? { ...a, hidden_by: [...(a.hidden_by||[]), currentUser] } : a));
@@ -210,7 +199,6 @@ function App() {
     catch (e) { console.error(e); fetchActivities(); }
   };
 
-  // ↩️ 恢复 (后悔药)
   const handleRestore = async (activityId: string) => {
     if (!window.confirm("🥰 要恢复这个活动吗？")) return;
     setIsLoading(true);
@@ -221,12 +209,29 @@ function App() {
     finally { setIsLoading(false); }
   };
 
+  // 📝 发布活动 (校验逻辑升级)
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
-    setIsLoading(true);
+    
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
+
+    // 1. 获取数值
+    const minVal = parseInt(formData.get('min_people') as string) || 2; // 默认为2
+    const maxVal = parseInt(formData.get('max_people') as string) || 5;
+
+    // 2. 👮‍♂️ 逻辑校验
+    if (minVal < 2) {
+      alert("❌ 拼单约饭至少需要 2 个人哦！\n(不然就是独自狂欢啦)");
+      return;
+    }
+    if (maxVal < minVal) {
+      alert(`❌ 数学鬼才？\n最大人数 (${maxVal}) 不能少于最少人数 (${minVal})！`);
+      return;
+    }
+
+    setIsLoading(true);
     const rawTime = formData.get('time') as string;
     const dateObj = new Date(rawTime);
     const displayTime = dateObj.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
@@ -235,8 +240,8 @@ function App() {
       title: formData.get('title') as string,
       description: formData.get('description') as string,
       category: formData.get('category'),
-      max_people: parseInt(formData.get('max_people') as string) || 5,
-      min_people: parseInt(formData.get('min_people') as string) || 1,
+      max_people: maxVal,
+      min_people: minVal, // 使用校验后的值
       time: displayTime, 
       location: formData.get('location') as string,
       author: currentUser,
@@ -257,7 +262,6 @@ function App() {
   const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
-  // 🧩 ActivityCard 组件
   const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
     const [expanded, setExpanded] = useState(false);
     
@@ -266,11 +270,9 @@ function App() {
     const isAuthor = activity.author === currentUser; 
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
-    
-    // 🆕 状态判断
     const isDeleted = activity.status === 'deleted';
     const isHidden = (activity.hidden_by || []).includes(currentUser);
-    const isGhost = isDeleted || isHidden; // 是否是“影子”活动(被删或被藏)
+    const isGhost = isDeleted || isHidden;
 
     const content = activity.description || "暂无详情";
     const isLongText = content.length > 50;
@@ -281,10 +283,7 @@ function App() {
     };
 
     if (isGhost) {
-       // 👻 如果是回收站里的活动，按钮统一变成恢复
-       btnConfig = { 
-         text: "↩️ 恢复活动", disabled: false, style: "bg-gray-800 text-white shadow-md active:scale-95", onClick: () => handleRestore(activity._id)
-       };
+       btnConfig = { text: "↩️ 恢复活动", disabled: false, style: "bg-gray-800 text-white shadow-md active:scale-95", onClick: () => handleRestore(activity._id) };
     } else if (isAuthor) {
       if (isFull) {
         btnConfig = { text: "🚀 全体就绪，发车！", disabled: false, style: "bg-green-500 text-white shadow-lg scale-105 font-black animate-pulse", onClick: async () => alert("好耶！人都齐了，快去联系大家吧！") };
@@ -301,28 +300,15 @@ function App() {
 
     return (
       <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 transition-all hover:shadow-md relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""}`}>
-        
-        {/* 垃圾桶：只有正常状态 + 发起者 + 广场模式 显示 */}
         {!isGhost && isAuthor && showJoinBtn && (
-          <button onClick={() => handleDelete(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors">
-            <Trash2 size={16} />
-          </button>
+          <button onClick={() => handleDelete(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
         )}
-
-        {/* 扫帚：只有正常状态 + 档案模式 显示 */}
         {!isGhost && showSweepBtn && (
-           <button onClick={() => handleHide(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-slate-100 hover:text-black transition-colors" title="移除">
-             <Eraser size={16} />
-           </button>
+           <button onClick={() => handleHide(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-slate-100 hover:text-black transition-colors" title="移除"><Eraser size={16} /></button>
         )}
-
-        {/* 恢复提示标签 */}
         {isGhost && (
-          <div className="absolute top-6 right-6 px-3 py-1 bg-gray-200 text-gray-500 text-xs font-bold rounded-full">
-            {isDeleted ? "已解散" : "已隐藏"}
-          </div>
+          <div className="absolute top-6 right-6 px-3 py-1 bg-gray-200 text-gray-500 text-xs font-bold rounded-full">{isDeleted ? "已解散" : "已隐藏"}</div>
         )}
-
         <div className="flex justify-between items-start mb-3 pr-10">
           <div className="flex gap-2 items-center mb-1">
              <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${activity.category === '约饭' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{activity.category || "约饭"}</span>
@@ -331,9 +317,7 @@ function App() {
             <User size={12} /> {joined.length} <span className="opacity-50 mx-1">/</span> {minP === 1 ? activity.max_people : `${minP}-${activity.max_people}`}人
           </span>
         </div>
-
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
-        
         <div className="mb-6 relative">
           <p onClick={() => isLongText && setExpanded(!expanded)} className={`text-gray-500 text-sm leading-relaxed whitespace-pre-wrap ${isLongText ? "cursor-pointer hover:text-gray-700" : ""}`}>{displayContent}</p>
           {isLongText && (
@@ -342,24 +326,17 @@ function App() {
             </button>
           )}
         </div>
-
         <div className="flex flex-col gap-3">
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-bold"><MapPin size={14}/> {activity.location}</div>
-                {/* 广场模式显示 Join 按钮 */}
                 {showJoinBtn && (
-                  <button onClick={btnConfig.onClick} disabled={btnConfig.disabled} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnConfig.style}`}>
-                    {btnConfig.text}
-                  </button>
+                  <button onClick={btnConfig.onClick} disabled={btnConfig.disabled} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnConfig.style}`}>{btnConfig.text}</button>
                 )}
-                {/* 档案模式：如果是回收站显示恢复按钮，否则显示状态 */}
                 {!showJoinBtn && (
                   <>
                     {isGhost ? (
-                      <button onClick={btnConfig.onClick} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${btnConfig.style}`}>
-                        {btnConfig.text}
-                      </button>
+                      <button onClick={btnConfig.onClick} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${btnConfig.style}`}>{btnConfig.text}</button>
                     ) : (
                       <div className="text-xs font-bold text-gray-300">{isExpired(activity) ? "已过期" : "进行中"}</div>
                     )}
@@ -373,7 +350,6 @@ function App() {
 
   return (
     <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
-      {/* 登录弹窗 (省略) */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center relative animate-scale-in">
@@ -388,7 +364,6 @@ function App() {
         </div>
       )}
 
-      {/* 顶部导航 */}
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg transition-colors duration-500 ${theme.primary}`}>C</div>
@@ -433,24 +408,14 @@ function App() {
               </div>
               <Zap className="absolute right-[-20px] top-[-20px] opacity-20 rotate-12" size={160} />
             </div>
-            
             <div className="flex justify-between items-end pl-2 pr-2">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">My History</h3>
-              {/* 👁️ 回收站开关 */}
-              <button 
-                onClick={() => setShowHiddenItems(!showHiddenItems)}
-                className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${showHiddenItems ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-400"}`}
-              >
-                {showHiddenItems ? <><Eye size={12}/> 隐藏已删除</> : <><EyeOff size={12}/> 显示已删除</>}
-              </button>
+              <button onClick={() => setShowHiddenItems(!showHiddenItems)} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${showHiddenItems ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-400"}`}>{showHiddenItems ? <><Eye size={12}/> 隐藏已删除</> : <><EyeOff size={12}/> 显示已删除</>}</button>
             </div>
-            
             <div>
               {myActivities.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">干净得像一张白纸</div>}
-              {/* 档案模式下，Join按钮关闭，扫帚按钮开启 */}
               {myActivities.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}
             </div>
-            
             <div className="mt-12 mb-8 text-center opacity-40">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
               <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Jointly Developed by</p>
@@ -460,14 +425,12 @@ function App() {
         )}
       </main>
 
-      {/* 悬浮发布按钮 */}
       {activeTab === 'square' && (
         <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}>
           <Plus size={28} />
         </button>
       )}
 
-      {/* 底部导航 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}>
           <Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} />
@@ -479,7 +442,6 @@ function App() {
         </button>
       </div>
 
-      {/* 换肤弹窗 */}
       {showThemeModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up">
@@ -500,7 +462,6 @@ function App() {
         </div>
       )}
 
-      {/* 发布弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
            <div className="flex justify-between items-center mb-6 pt-4">
@@ -512,7 +473,7 @@ function App() {
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label><input type="datetime-local" name="time" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
              <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div></div>
-             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span><input type="number" name="min_people" placeholder="1" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span><input type="number" name="max_people" placeholder="5" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
+             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数限制</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold whitespace-nowrap">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
              <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情 (选填)</label><textarea name="description" placeholder="可以在这里填写：&#10;• 成员年级要求&#10;• 成员性别要求&#10;• 兴趣爱好/口味偏好&#10;• 活动具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-40 resize-none outline-none font-medium text-sm leading-relaxed placeholder:text-gray-300" /></div>
              <button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button>
            </form>
