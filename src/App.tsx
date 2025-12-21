@@ -295,7 +295,22 @@ function App() {
   const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
   const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
-  const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setUserData(null); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
+  const handleLogout = () => { 
+    localStorage.removeItem("club_username"); 
+    setCurrentUser(""); 
+    setUserData(null); 
+    
+    // 🧹 新增：彻底打扫战场，清空所有残留输入
+    setVerifyEmail(""); 
+    setVerifyCode(""); 
+    setTempProfile({});
+    setIsEditingProfile(false);
+    
+    setShowLoginModal(true); 
+    setLoginStep("inputName"); 
+    setLoginName(""); 
+    setLoginPassword(""); 
+  };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
   const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
