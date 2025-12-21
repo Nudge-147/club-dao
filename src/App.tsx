@@ -1,6 +1,7 @@
+import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Trash2, Eraser, LogOut, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -40,7 +41,7 @@ interface Activity {
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
-  status?: 'active' | 'locked' | 'done' | 'deleted';
+  status?: 'active' | 'locked' | 'cancelled' | 'done';
   requires_verification?: boolean;
 }
 
@@ -152,7 +153,8 @@ function App() {
       const hidden = (a.hidden_by || []).includes(currentUser);
       if (hidden) return false;
       const st = a.status || 'active';
-      return st === 'active' || st === 'locked' || st === 'deleted';
+      if (st === 'cancelled' && a.author === currentUser) return false;
+      return st === 'active' || st === 'locked' || st === 'cancelled';
     });
   }, [activities, currentUser]);
 
@@ -223,10 +225,34 @@ function App() {
     } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
-  const handleToggleLock = async (activityId: string) => {
+  const handleToggleRecruit = async (activityId: string) => {
     setIsLoading(true);
     try {
       const res = await cloud.invoke("toggle-lock", { activityId, username: currentUser });
+      if (res.ok) fetchActivities();
+      else alert(res.msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDissolve = async (activityId: string) => {
+    if (!window.confirm("确定解散？解散后活动立刻失效并从广场消失")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("cancel-activity", { activityId, username: currentUser });
+      if (res.ok) fetchActivities();
+      else alert(res.msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteActivity = async (activityId: string) => {
+    if (!window.confirm("确定完成活动？完成后将从广场消失，并进入历史")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
       if (res?.ok) fetchActivities();
       else alert(res?.msg || "操作失败");
     } finally {
@@ -234,34 +260,7 @@ function App() {
     }
   };
 
-  const handleDeleteActivity = async (activityId: string) => {
-    if (!window.confirm("确定解散？解散后该活动将失效")) return;
-    setIsLoading(true);
-    try {
-      const res = await cloud.invoke("delete-activity", { activityId, username: currentUser });
-      if (res?.ok) {
-        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'deleted' } : a));
-      } else alert(res?.msg || "解散失败");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCompleteActivity = async (activityId: string) => {
-    if (!window.confirm("确定完成活动？完成后将从广场消失并加入历史")) return;
-    setIsLoading(true);
-    try {
-      const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
-      if (res?.ok) {
-        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'done' } : a));
-        fetchUserData(currentUser);
-      } else alert(res?.msg || "操作失败");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAckDeleted = async (activityId: string) => {
+  const handleAckCancelled = async (activityId: string) => {
     setIsLoading(true);
     try {
       const res = await cloud.invoke("ack-activity-deleted", { activityId, username: currentUser });
@@ -350,24 +349,27 @@ function App() {
     const isAuthor = activity.author === currentUser; 
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
-    const status = activity.status || 'active';
-    const isDeleted = status === 'deleted';
-    const isDone = status === 'done';
-    const isLocked = status === 'locked';
-    const isActive = status === 'active';
+    const st = activity.status || 'active';
+    const isDone = st === 'done';
+    const isCancelled = st === 'cancelled';
+    const isLocked = st === 'locked';
+    const isActive = st === 'active';
     const isHidden = (activity.hidden_by || []).includes(currentUser);
-    const isGhost = isDeleted || isHidden;
-    const hasOthers = joined.length > 1;
+    const isGhost = isHidden;
     const canFinish = joined.length >= minP;
 
     const actionButtons: React.ReactNode[] = [];
 
     if (isAuthor) {
       if (isDone) {
-        actionButtons.push(<button key="done" className="px-6 py-2 rounded-xl text-sm font-bold bg-green-100 text-green-600 cursor-default" disabled>已完成</button>);
+        actionButtons.push(
+          <button key="done" className="px-6 py-2 rounded-xl text-sm font-bold bg-green-100 text-green-600" disabled>
+            已完成
+          </button>
+        );
       } else if (isLocked) {
         actionButtons.push(
-          <button key="reopen" onClick={() => handleToggleLock(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow">
+          <button key="reopen" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow">
             撤回继续召集
           </button>
         );
@@ -376,21 +378,35 @@ function App() {
             确定完成
           </button>
         );
+        actionButtons.push(
+          <button key="dissolve" onClick={() => handleDissolve(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
+            解散
+          </button>
+        );
       } else if (isActive) {
         if (canFinish) {
           actionButtons.push(
-            <button key="lock" onClick={() => handleToggleLock(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow-md">
+            <button key="lock" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow-md">
               结束召集
             </button>
           );
         } else {
-          actionButtons.push(<button key="recruiting" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-400 cursor-default" disabled>招募中</button>);
+          actionButtons.push(
+            <button key="recruiting" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-400" disabled>
+              招募中
+            </button>
+          );
         }
+        actionButtons.push(
+          <button key="dissolve" onClick={() => handleDissolve(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
+            解散
+          </button>
+        );
       }
     } else {
-      if (isDeleted) {
+      if (isCancelled) {
         actionButtons.push(
-          <button key="ack" onClick={() => handleAckDeleted(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-500">
+          <button key="ack" onClick={() => handleAckCancelled(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-500">
             知道了
           </button>
         );
@@ -402,7 +418,11 @@ function App() {
         );
       } else if (showJoinBtn) {
         if (isFull) {
-          actionButtons.push(<button key="full" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-200 text-gray-400 cursor-not-allowed" disabled>已满员</button>);
+          actionButtons.push(
+            <button key="full" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-200 text-gray-400" disabled>
+              已满员
+            </button>
+          );
         } else {
           actionButtons.push(
             <button key="join" onClick={() => handleJoin(activity._id)} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${theme.primary} text-white shadow-md active:scale-95`}>
@@ -415,8 +435,7 @@ function App() {
 
     return (
       <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""} ${isDone && !isGhost ? "border-l-4 border-l-green-500" : ""}`}>
-        {!isGhost && isAuthor && showJoinBtn && (hasOthers ? <button onClick={() => handleQuit(activity._id)} className="absolute top-6 right-6 p-2 bg-red-50 text-red-500 rounded-full"><LogOut size={16} /></button> : <button onClick={() => handleDeleteActivity(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Trash2 size={16} /></button>)}
-        {!isGhost && showSweepBtn && (isDeleted || isExpired(activity) || isDone) && <button onClick={() => handleCommonOp("hide-activity", activity._id, "移除?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Eraser size={16} /></button>}
+        {!isGhost && showSweepBtn && (isCancelled || isDone) && <button onClick={() => handleCommonOp("hide-activity", activity._id, "移除?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Eraser size={16} /></button>}
         
         <div className="flex justify-between items-start mb-3 pr-10">
           <div className="flex gap-2 items-center mb-1">
@@ -470,6 +489,79 @@ function App() {
         
         {/* 背景装饰 */}
         <Star className={`absolute -bottom-4 -right-4 w-24 h-24 rotate-12 ${isUnlocked ? "text-yellow-500/10" : "text-gray-500/5"}`} />
+      </div>
+    );
+  };
+
+  const SecretGuildCard = () => {
+    if (!userData?.is_verified) return null;
+
+    const deadline = new Date("2025-12-28T23:59:59").getTime();
+    const now = Date.now();
+    const left = Math.max(0, deadline - now);
+    const days = Math.floor(left / (24 * 3600 * 1000));
+    const hours = Math.floor((left % (24 * 3600 * 1000)) / (3600 * 1000));
+
+    const key = `club_secret_badge_${currentUser}`;
+    const existing = localStorage.getItem(key);
+
+    const badges = [
+      { name: "创世会员", desc: "你是第一批进群的人。" },
+      { name: "暗金节点", desc: "信息获取速度 +1。" },
+      { name: "白名单玩家", desc: "你拥有一次“优先上车权”。" },
+      { name: "AI炼金术士", desc: "你把灵感变成作品。" },
+      { name: "链上观察者", desc: "你总能看到趋势拐点。" },
+      { name: "赛道领航员", desc: "你走在多数人前面。" },
+    ];
+
+    const draw = () => {
+      if (existing) return;
+      const pick = badges[Math.floor(Math.random() * badges.length)];
+      localStorage.setItem(key, JSON.stringify(pick));
+      alert(`🎁 抽到徽章：${pick.name}\n${pick.desc}`);
+    };
+
+    const badge = existing ? JSON.parse(existing) as { name: string; desc: string } : null;
+
+    return (
+      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-black text-lg">隐藏成就 · 社团会员</div>
+          <div className="text-[10px] font-bold px-3 py-1 rounded-full bg-black text-white">
+            ⏳ {left > 0 ? `${days}天${hours}小时` : "已截止（会更新二维码）"}
+          </div>
+        </div>
+
+        <div className="text-sm text-gray-500 font-bold leading-relaxed mb-4">
+          🎯 加入「区块链 + AI大模型金科大赛」社团微信群，即可解锁隐藏徽章（盲盒抽取一次）。
+          <br />
+          <span className="text-red-500 font-bold">12/28 前有效（过期后将更新）</span>
+        </div>
+
+        <div className="rounded-2xl bg-gray-50 p-4 flex items-center justify-center">
+          <img
+            src={code4teamQR}
+            alt="区块链 + AI 大模型金科大赛社团群二维码"
+            className="w-full max-w-[260px] rounded-xl"
+          />
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={draw}
+            className={`flex-1 py-3 rounded-xl font-black text-sm ${existing ? "bg-gray-100 text-gray-400" : "bg-black text-white"}`}
+            disabled={!!existing}
+          >
+            {existing ? "已抽取" : "我已入群，抽取徽章"}
+          </button>
+        </div>
+
+        {badge && (
+          <div className="mt-4 p-4 rounded-2xl border border-yellow-200 bg-yellow-50">
+            <div className="font-black text-yellow-800">🎖️ {badge.name}</div>
+            <div className="text-xs font-bold text-yellow-700 mt-1">{badge.desc}</div>
+          </div>
+        )}
       </div>
     );
   };
@@ -550,6 +642,7 @@ function App() {
 
             {/* 成就系统卡片 */}
             <AchievementCard />
+            <SecretGuildCard />
 
             {/* 认证卡片 (仅当未认证时显示) */}
             {!userData?.is_verified && (
