@@ -173,13 +173,15 @@ function App() {
   };
 
   const squareList = useMemo(() => {
-    return activities.filter(activity => {
-      const matchSearch = activity.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCategory = activeCategory === "全部" || activity.category === activeCategory;
-      const expired = isExpired(activity);
-      const isHidden = (activity.hidden_by || []).includes(currentUser);
-      const isDeleted = activity.status === 'deleted';
-      return matchSearch && matchCategory && !expired && !isHidden && !isDeleted;
+    return activities.filter(a => {
+      const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCategory = activeCategory === "全部" || a.category === activeCategory;
+
+      const isActive = (a.status || 'active') === 'active';
+      const isHidden = (a.hidden_by || []).includes(currentUser);
+      const expired = isExpired(a);
+
+      return matchSearch && matchCategory && isActive && !expired && !isHidden;
     });
   }, [activities, searchTerm, activeCategory, currentUser]);
 
@@ -229,16 +231,6 @@ function App() {
     } finally { setIsLoading(false); }
   };
 
-  const handleComplete = async (activityId: string) => {
-    if (!window.confirm("确定完成活动？完成后会进入历史，且参与次数+1")) return;
-    setIsLoading(true);
-    try {
-      const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
-      if (res.ok) { fetchActivities(); fetchUserData(currentUser); }
-      else alert(res.msg);
-    } finally { setIsLoading(false); }
-  };
-
   const handleCancel = async (activityId: string) => {
     if (!window.confirm("确定取消/解散？参与者会看到活动失效提醒")) return;
     setIsLoading(true);
@@ -247,6 +239,32 @@ function App() {
       if (res.ok) fetchActivities();
       else alert(res.msg);
     } finally { setIsLoading(false); }
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!window.confirm("确定解散？解散后该活动将失效")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("delete-activity", { activityId, username: currentUser });
+      if (res?.ok) {
+        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'deleted' } : a));
+      } else alert(res?.msg || "解散失败");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteActivity = async (activityId: string) => {
+    if (!window.confirm("确定完成活动？完成后将从广场消失")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
+      if (res?.ok) {
+        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'completed' } : a));
+      } else alert(res?.msg || "操作失败");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAckCancelled = async (activityId: string) => {
@@ -364,7 +382,7 @@ function App() {
           </button>
         );
         actionButtons.push(
-          <button key="complete" onClick={() => handleComplete(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow">
+          <button key="complete" onClick={() => handleCompleteActivity(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow">
             确定完成
           </button>
         );
@@ -414,7 +432,7 @@ function App() {
 
     return (
       <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""} ${isDone && !isGhost ? "border-l-4 border-l-green-500" : ""}`}>
-        {!isGhost && isAuthor && showJoinBtn && (hasOthers ? <button onClick={() => handleQuit(activity._id)} className="absolute top-6 right-6 p-2 bg-red-50 text-red-500 rounded-full"><LogOut size={16} /></button> : <button onClick={() => handleCommonOp("delete-activity", activity._id, "解散?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Trash2 size={16} /></button>)}
+        {!isGhost && isAuthor && showJoinBtn && (hasOthers ? <button onClick={() => handleQuit(activity._id)} className="absolute top-6 right-6 p-2 bg-red-50 text-red-500 rounded-full"><LogOut size={16} /></button> : <button onClick={() => handleDeleteActivity(activity._id)} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Trash2 size={16} /></button>)}
         {!isGhost && showSweepBtn && (isDeleted || isExpired(activity) || isDone) && <button onClick={() => handleCommonOp("hide-activity", activity._id, "移除?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Eraser size={16} /></button>}
         
         <div className="flex justify-between items-start mb-3 pr-10">
