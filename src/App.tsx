@@ -166,6 +166,18 @@ function App() {
     });
   }, [activities, currentUser]);
 
+  // 回收站：我隐藏的或我解散的
+  const myTrashList = useMemo(() => {
+    return activities.filter(a => {
+      const isMineOrJoined = a.author === currentUser || (a.joined_users || []).includes(currentUser);
+      if (!isMineOrJoined) return false;
+
+      const hidden = (a.hidden_by || []).includes(currentUser);
+      const deletedByMe = a.author === currentUser && a.status === 'deleted';
+      return hidden || deletedByMe;
+    });
+  }, [activities, currentUser]);
+
   const isExpired = (activity: Activity) => {
     if (!activity.time) return false;
     const now = Date.now();
@@ -437,8 +449,40 @@ function App() {
             )}
 
             {activitySubTab === 'trash' && (
-              <div className="text-center py-12 text-gray-300 font-bold">
-                回收站功能下一步加
+              <div>
+                <div className="mb-4 bg-orange-50 text-orange-600 p-4 rounded-xl text-xs font-bold leading-relaxed">
+                  💡 这里是你移除/隐藏或解散的活动。你可以【恢复】它们。
+                  <br />
+                  （永久删除建议最后再上，等鉴权做完）
+                </div>
+
+                {myTrashList.length === 0 && (
+                  <div className="text-center py-12 text-gray-300 font-bold">回收站是空的</div>
+                )}
+
+                {myTrashList.map(a => (
+                  <div key={a._id} className="relative">
+                    <ActivityCard activity={a} showJoinBtn={false} showSweepBtn={false} />
+                    <div className="flex gap-2 justify-end -mt-2 mb-6">
+                      <button
+                        onClick={() => handleCommonOp("restore-activity", a._id, "恢复这个活动？")}
+                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold"
+                      >
+                        恢复
+                      </button>
+
+                      {/* 永久删除先别开，等你鉴权做完再放出来 */}
+                      {/* {a.author === currentUser && (
+                        <button
+                          onClick={() => handleCommonOp("hard-delete-activity", a._id, "⚠️ 永久删除不可恢复，确定？")}
+                          className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold"
+                        >
+                          永久删除
+                        </button>
+                      )} */}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
