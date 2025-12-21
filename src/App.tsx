@@ -1,7 +1,7 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -92,6 +92,12 @@ function App() {
     }
   }, [showCreateModal]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    const saved = localStorage.getItem(`club_secret_badge_${currentUser}`) || "";
+    setSecretBadge(saved);
+  }, [currentUser]);
+
   const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
   const handleDateChange = (key: keyof typeof dateState, val: string) => {
     const numVal = parseInt(val);
@@ -113,6 +119,14 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
+
+  // --- 隐藏成就：社群会员盲盒 ---
+  const [showSecret, setShowSecret] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [secretBadge, setSecretBadge] = useState<string>(() => {
+    if (!currentUser) return "";
+    return localStorage.getItem(`club_secret_badge_${currentUser}`) || "";
+  });
 
   const theme = THEMES[currentTheme];
 
@@ -194,6 +208,51 @@ function App() {
       return; 
     }
     setCurrentTheme(theme); localStorage.setItem("club_theme", theme); setShowThemeModal(false);
+  };
+
+  const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
+  const deadlineTs = new Date(SECRET_DEADLINE_STR).getTime();
+  const nowTs = Date.now();
+  const isSecretExpired = nowTs > deadlineTs;
+  const daysLeft = Math.max(0, Math.ceil((deadlineTs - nowTs) / (24 * 60 * 60 * 1000)));
+
+  const SECRET_BADGES = [
+    "🟦 链上萌新",
+    "🟪 模型驯兽师",
+    "🟨 金科欧皇",
+    "🟩 合约守护者",
+    "🟥 红队破局者",
+    "🟫 数据炼金术士",
+    "⬛ 黑金会员·Founder",
+  ];
+
+  const drawSecretBadge = async () => {
+    if (!currentUser) return;
+    if (secretBadge) {
+      alert("你已经抽过徽章了（每人一次）");
+      return;
+    }
+    if (isSecretExpired) {
+      alert("本期二维码入口已截止（后续会更新）");
+      return;
+    }
+
+    setIsDrawing(true);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const pool: string[] = [];
+    for (let i = 0; i < SECRET_BADGES.length; i++) {
+      const b = SECRET_BADGES[i];
+      const weight = i === SECRET_BADGES.length - 1 ? 1 : i >= 4 ? 3 : 8;
+      for (let k = 0; k < weight; k++) pool.push(b);
+    }
+
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    localStorage.setItem(`club_secret_badge_${currentUser}`, picked);
+    setSecretBadge(picked);
+
+    setIsDrawing(false);
+    alert(`🎉 你抽到了：${picked}`);
   };
 
   const handleJoin = async (activityId: string) => {
@@ -493,75 +552,113 @@ function App() {
     );
   };
 
-  const SecretGuildCard = () => {
+  const SecretAchievementCard = () => {
     if (!userData?.is_verified) return null;
 
-    const deadline = new Date("2025-12-28T23:59:59").getTime();
-    const now = Date.now();
-    const left = Math.max(0, deadline - now);
-    const days = Math.floor(left / (24 * 3600 * 1000));
-    const hours = Math.floor((left % (24 * 3600 * 1000)) / (3600 * 1000));
-
-    const key = `club_secret_badge_${currentUser}`;
-    const existing = localStorage.getItem(key);
-
-    const badges = [
-      { name: "创世会员", desc: "你是第一批进群的人。" },
-      { name: "暗金节点", desc: "信息获取速度 +1。" },
-      { name: "白名单玩家", desc: "你拥有一次“优先上车权”。" },
-      { name: "AI炼金术士", desc: "你把灵感变成作品。" },
-      { name: "链上观察者", desc: "你总能看到趋势拐点。" },
-      { name: "赛道领航员", desc: "你走在多数人前面。" },
-    ];
-
-    const draw = () => {
-      if (existing) return;
-      const pick = badges[Math.floor(Math.random() * badges.length)];
-      localStorage.setItem(key, JSON.stringify(pick));
-      alert(`🎁 抽到徽章：${pick.name}\n${pick.desc}`);
-    };
-
-    const badge = existing ? JSON.parse(existing) as { name: string; desc: string } : null;
-
     return (
-      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-black text-lg">隐藏成就 · 社团会员</div>
-          <div className="text-[10px] font-bold px-3 py-1 rounded-full bg-black text-white">
-            ⏳ {left > 0 ? `${days}天${hours}小时` : "已截止（会更新二维码）"}
+      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+        <button
+          onClick={() => setShowSecret(v => !v)}
+          className="w-full p-5 flex items-center justify-between active:scale-[0.99] transition"
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${secretBadge ? "bg-yellow-50" : "bg-gray-50"}`}>
+              {secretBadge ? <Sparkles className="text-yellow-600" size={18} /> : <Gift className="text-gray-500" size={18} />}
+            </div>
+            <div className="text-left">
+              <div className="font-black text-sm flex items-center gap-2">
+                隐藏成就：社团会员盲盒
+                {!secretBadge && <span className="text-[10px] px-2 py-0.5 rounded-full bg-black text-white">NEW</span>}
+              </div>
+              <div className="text-[11px] font-bold text-gray-400">
+                加入微信群，抽取随机特殊徽章（盲盒）
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className={`text-[11px] font-black flex items-center gap-1 justify-end ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
+              <Timer size={14} />
+              {isSecretExpired ? "已截止" : `剩余 ${daysLeft} 天`}
+            </div>
+            <div className="text-[10px] font-bold text-gray-300">
+              12/28 截止（之后更新）
+            </div>
+          </div>
+        </button>
+
+        <div
+          className={`px-5 pb-5 transition-all duration-300 ${
+            showSecret ? "max-h-[900px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-center gap-2 font-black text-sm mb-2">
+              <QrCode size={16} className="text-gray-600" />
+              扫码进群（限认证校友）
+            </div>
+
+            <div className="text-[11px] font-bold text-gray-500 leading-relaxed mb-3">
+              进群后你就是【区块链 + AI 大模型金科大赛社团】会员。<br />
+              会员可抽取随机【特殊徽章】（盲盒），越稀有越有排面。
+            </div>
+
+            <div className="flex items-center justify-center rounded-2xl bg-white p-4 border border-gray-100">
+              <img
+                src={code4teamQR}
+                alt="区块链 + AI 大模型金科大赛社团群二维码"
+                className={`w-full max-w-[260px] rounded-xl transition ${
+                  isSecretExpired ? "opacity-40 grayscale" : "opacity-100"
+                }`}
+              />
+            </div>
+
+            <div className={`mt-3 text-[11px] font-black ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
+              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : "⏳ 稀缺入口：12/28 前有效（过期后会更新）"}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-gray-100 p-4 bg-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-black text-sm">会员盲盒徽章</div>
+                <div className="text-[11px] font-bold text-gray-400">
+                  每人一次抽取机会（永久保存）
+                </div>
+              </div>
+
+              <button
+                onClick={drawSecretBadge}
+                disabled={isDrawing || !!secretBadge || isSecretExpired}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition active:scale-95 ${
+                  isSecretExpired
+                    ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                    : secretBadge
+                    ? "bg-green-50 text-green-600 cursor-default"
+                    : isDrawing
+                    ? "bg-black text-white opacity-70"
+                    : "bg-black text-white"
+                }`}
+              >
+                {isSecretExpired ? "已截止" : secretBadge ? "已抽取" : isDrawing ? "开奖中..." : "抽一次"}
+              </button>
+            </div>
+
+            {secretBadge ? (
+              <div className="mt-3 bg-yellow-50 border border-yellow-100 rounded-2xl p-3">
+                <div className="text-[11px] font-bold text-yellow-700">你获得的特殊徽章</div>
+                <div className="text-lg font-black text-yellow-800 mt-1">{secretBadge}</div>
+                <div className="text-[10px] font-bold text-yellow-600 mt-1">
+                  这是“身份感”奖励：越稀有越有优越感 ✨
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 text-[11px] font-bold text-gray-400">
+                扫码进群后，点击【抽一次】领取你的盲盒徽章～
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="text-sm text-gray-500 font-bold leading-relaxed mb-4">
-          🎯 加入「区块链 + AI大模型金科大赛」社团微信群，即可解锁隐藏徽章（盲盒抽取一次）。
-          <br />
-          <span className="text-red-500 font-bold">12/28 前有效（过期后将更新）</span>
-        </div>
-
-        <div className="rounded-2xl bg-gray-50 p-4 flex items-center justify-center">
-          <img
-            src={code4teamQR}
-            alt="区块链 + AI 大模型金科大赛社团群二维码"
-            className="w-full max-w-[260px] rounded-xl"
-          />
-        </div>
-
-        <div className="mt-4 flex gap-2">
-          <button
-            onClick={draw}
-            className={`flex-1 py-3 rounded-xl font-black text-sm ${existing ? "bg-gray-100 text-gray-400" : "bg-black text-white"}`}
-            disabled={!!existing}
-          >
-            {existing ? "已抽取" : "我已入群，抽取徽章"}
-          </button>
-        </div>
-
-        {badge && (
-          <div className="mt-4 p-4 rounded-2xl border border-yellow-200 bg-yellow-50">
-            <div className="font-black text-yellow-800">🎖️ {badge.name}</div>
-            <div className="text-xs font-bold text-yellow-700 mt-1">{badge.desc}</div>
-          </div>
-        )}
       </div>
     );
   };
@@ -642,7 +739,7 @@ function App() {
 
             {/* 成就系统卡片 */}
             <AchievementCard />
-            <SecretGuildCard />
+            <SecretAchievementCard />
 
             {/* 认证卡片 (仅当未认证时显示) */}
             {!userData?.is_verified && (
