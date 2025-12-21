@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Trash2, Eraser, Eye, EyeOff, LogOut, Shield, ShieldCheck, Mail, Edit3, Save } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Trash2, Eraser, Eye, EyeOff, LogOut, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -12,7 +12,7 @@ const cloud = new Cloud({
 // --- 数据类型 ---
 interface UserProfile {
   gender?: "男" | "女" | "保密";
-  grade?: string; // 本科大一...
+  grade?: string;
   city?: string;
   hobbies?: string;
   intro?: string;
@@ -40,7 +40,7 @@ interface Activity {
   joined_users: string[];
   hidden_by?: string[]; 
   status?: 'active' | 'deleted' | 'completed';
-  requires_verification?: boolean; // 🆕 新增字段
+  requires_verification?: boolean;
 }
 
 // --- 皮肤配置 ---
@@ -63,18 +63,15 @@ function App() {
   const [showHiddenItems, setShowHiddenItems] = useState(false);
   const [inputTimeStr, setInputTimeStr] = useState("");
 
-  // 用户数据
   const [currentUser, setCurrentUser] = useState<string>("");
   const [userData, setUserData] = useState<UserData | null>(null);
 
-  // 认证与档案相关状态
   const [verifyEmail, setVerifyEmail] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempProfile, setTempProfile] = useState<UserProfile>({});
 
-  // --- 时间选择器逻辑 ---
   const [dateState, setDateState] = useState(() => {
     const tmr = new Date(); tmr.setDate(tmr.getDate() + 1); 
     return { year: tmr.getFullYear(), month: tmr.getMonth() + 1, day: tmr.getDate(), hour: 0, minute: 0 };
@@ -107,7 +104,6 @@ function App() {
   };
   const range = (start: number, end: number) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
-  // 主题与登录
   const [currentTheme, setCurrentTheme] = useState<ThemeKey>("warm");
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(true);
@@ -123,7 +119,7 @@ function App() {
     if (savedName) {
       setCurrentUser(savedName);
       setShowLoginModal(false);
-      fetchUserData(savedName); // 获取用户详细信息
+      fetchUserData(savedName);
     }
     const savedTheme = localStorage.getItem("club_theme") as ThemeKey;
     if (savedTheme && THEMES[savedTheme]) setCurrentTheme(savedTheme);
@@ -144,10 +140,31 @@ function App() {
     } catch (e) { console.error(e); }
   };
 
+  // --- 统计数据 ---
   const userActivityCount = useMemo(() => {
     if (!currentUser) return 0;
+    // 参与次数 = 我发布的 + 我加入的 (不去重，只要是有效的活动)
     return activities.filter(a => (a.author === currentUser || (a.joined_users || []).includes(currentUser)) && a.status !== 'deleted').length;
   }, [activities, currentUser]);
+
+  // --- 拆分列表 ---
+  const myCreatedList = useMemo(() => {
+    return activities.filter(a => {
+      const isMine = a.author === currentUser;
+      const isDeleted = a.status === 'deleted';
+      return isMine && (showHiddenItems ? true : !isDeleted);
+    });
+  }, [activities, currentUser, showHiddenItems]);
+
+  const myJoinedList = useMemo(() => {
+    return activities.filter(a => {
+      // 注意：排除掉自己发起的，只算“参与别人”的
+      const isJoined = a.author !== currentUser && (a.joined_users || []).includes(currentUser);
+      const isHidden = (a.hidden_by || []).includes(currentUser);
+      const isDeleted = a.status === 'deleted';
+      return isJoined && (showHiddenItems ? true : (!isHidden && !isDeleted));
+    });
+  }, [activities, currentUser, showHiddenItems]);
 
   const isExpired = (activity: Activity) => {
     if (!activity.time) return false;
@@ -167,18 +184,11 @@ function App() {
     });
   }, [activities, searchTerm, activeCategory, currentUser]);
 
-  const myActivities = useMemo(() => {
-    return activities.filter(a => {
-      const isRelated = a.author === currentUser || (a.joined_users || []).includes(currentUser);
-      const isHidden = (a.hidden_by || []).includes(currentUser);
-      const isDeleted = a.status === 'deleted';
-      if (!isRelated) return false;
-      return showHiddenItems ? true : (!isHidden && !isDeleted);
-    });
-  }, [activities, currentUser, showHiddenItems]);
-
   const handleSetTheme = (theme: ThemeKey) => {
-    if (theme === "nju" && userActivityCount < 10) { alert(`🔒 解锁需要 10 次成就。\n当前进度：${userActivityCount}/10`); return; }
+    if (theme === "nju" && userActivityCount < 10) { 
+      alert(`🔒 解锁 [南大紫] 需要累计参与 10 次活动。\n\n当前进度：${userActivityCount}/10\n\n加油，多发活动或多参与！`); 
+      return; 
+    }
     setCurrentTheme(theme); localStorage.setItem("club_theme", theme); setShowThemeModal(false);
   };
 
@@ -217,12 +227,11 @@ function App() {
     setIsLoading(true);
     try {
       const res = await cloud.invoke(opName, { activityId, username: currentUser });
-      if (res.ok) { fetchActivities(); if(opName==='hide-activity') setActivities(prev=>prev.filter(a=>a._id!==activityId)); } // 简单处理
+      if (res.ok) { fetchActivities(); if(opName==='hide-activity') setActivities(prev=>prev.filter(a=>a._id!==activityId)); } 
       else alert(res.msg || "失败");
     } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
-  // 认证逻辑
   const sendCode = async () => {
     if (!verifyEmail.endsWith("nju.edu.cn")) { alert("请使用 @smail.nju.edu.cn 或 @nju.edu.cn 结尾的邮箱"); return; }
     setIsSendingCode(true);
@@ -238,11 +247,7 @@ function App() {
       const res = await cloud.invoke("verify-email", { type: 'verify', email: verifyEmail, code: verifyCode, username: currentUser });
       if (res.ok) { 
         alert("认证成功！");
-        
-        // ✨ 新增这两行：手动更新本地状态，不需要等网络请求
         setUserData(prev => prev ? { ...prev, is_verified: true, edu_email: verifyEmail } : null);
-        
-        // 原来的逻辑保留，作为双重保险
         // fetchUserData(currentUser); 
       } else {
         alert(res.msg);
@@ -250,7 +255,6 @@ function App() {
     } catch(e) { alert("验证失败"); }
   };
 
-  // 档案更新逻辑
   const saveProfile = async () => {
     try {
       const res = await cloud.invoke("user-ops", { type: 'update-profile', username: currentUser, profile: tempProfile });
@@ -266,7 +270,6 @@ function App() {
     const maxVal = parseInt(formData.get('max_people') as string) || 5;
     if (minVal < 2) { alert("❌ 至少 2 人"); return; }
     if (maxVal < minVal) { alert(`❌ 人数设置错误`); return; }
-
     const timeString = inputTimeStr.trim();
     if (!timeString) { alert("⏰ 请填写时间"); return; }
 
@@ -280,7 +283,7 @@ function App() {
       time: timeString, 
       location: formData.get('location') as string,
       author: currentUser,
-      requires_verification: formData.get('requires_verification') === 'on', // 🆕
+      requires_verification: formData.get('requires_verification') === 'on',
       created_at: Date.now(),
       joined_users: [currentUser],
       hidden_by: [],
@@ -291,26 +294,10 @@ function App() {
     setIsLoading(false);
   };
 
-  // 登录注册逻辑 (保持精简)
   const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
   const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
-  const handleLogout = () => { 
-    localStorage.removeItem("club_username"); 
-    setCurrentUser(""); 
-    setUserData(null); 
-    
-    // 🧹 新增：彻底打扫战场，清空所有残留输入
-    setVerifyEmail(""); 
-    setVerifyCode(""); 
-    setTempProfile({});
-    setIsEditingProfile(false);
-    
-    setShowLoginModal(true); 
-    setLoginStep("inputName"); 
-    setLoginName(""); 
-    setLoginPassword(""); 
-  };
+  const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setUserData(null); setVerifyEmail(""); setVerifyCode(""); setTempProfile({}); setIsEditingProfile(false); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
   const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
@@ -368,6 +355,40 @@ function App() {
     );
   };
 
+  // --- 成就组件 ---
+  const AchievementCard = () => {
+    const isUnlocked = userActivityCount >= 10;
+    const progress = Math.min((userActivityCount / 10) * 100, 100);
+
+    return (
+      <div className={`rounded-[2rem] p-6 mb-6 shadow-sm border relative overflow-hidden ${isUnlocked ? "bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200" : "bg-white border-gray-100"}`}>
+        <div className="flex justify-between items-center mb-4 relative z-10">
+          <h3 className={`font-bold text-lg flex items-center gap-2 ${isUnlocked ? "text-yellow-700" : "text-gray-800"}`}>
+            {isUnlocked ? <Crown size={20} className="text-yellow-500" /> : <Trophy size={20} className="text-gray-400" />}
+            {isUnlocked ? "南大社交达人" : "成就进度"}
+          </h3>
+          <span className={`text-xs font-bold px-3 py-1 rounded-full ${isUnlocked ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"}`}>
+            {isUnlocked ? "已解锁皮肤" : "未解锁"}
+          </span>
+        </div>
+        
+        <div className="relative z-10">
+           <div className="flex justify-between text-xs font-bold mb-2 text-gray-500">
+             <span>参与活动</span>
+             <span>{userActivityCount} / 10</span>
+           </div>
+           <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+             <div className={`h-full rounded-full transition-all duration-1000 ${isUnlocked ? "bg-yellow-400" : "bg-blue-500"}`} style={{ width: `${progress}%` }}></div>
+           </div>
+           {!isUnlocked && <p className="text-[10px] text-gray-400 mt-2 font-bold">🎯 达成 10 次即可解锁 [南大紫] 专属界面</p>}
+        </div>
+        
+        {/* 背景装饰 */}
+        <Star className={`absolute -bottom-4 -right-4 w-24 h-24 rotate-12 ${isUnlocked ? "text-yellow-500/10" : "text-gray-500/5"}`} />
+      </div>
+    );
+  };
+
   return (
     <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
       {showLoginModal && (<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"><div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center"><h2 className="text-3xl font-black mb-8">ClubDAO</h2>{loginStep==="inputName"&&(<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>)}{loginStep==="nameTaken"&&(<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl text-sm font-bold">该代号已存在</div><button onClick={()=>setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold">是本人，去登录</button><button onClick={resetToInputName} className="w-full bg-white border p-4 rounded-xl font-bold">换个名字</button></div>)}{loginStep==="inputPassword"&&( <form onSubmit={handleLogin}><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>)}{loginStep==="createAccount"&&(<form onSubmit={handleRegister}><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设个密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册并登录</button></form>)}{loginError&&<p className="text-red-500 mt-4 font-bold">{loginError}</p>}</div></div>)}
@@ -394,12 +415,15 @@ function App() {
                 </div>
                 <p className="text-white/80 text-sm mb-6">{userData?.profile?.intro || "这个人很懒，还没写自我介绍..."}</p>
                 <div className="flex gap-4 text-center">
-                  <div><p className="text-2xl font-bold">{userActivityCount}</p><p className="text-[10px] opacity-60">参与</p></div>
+                  <div><p className="text-2xl font-bold">{userActivityCount}</p><p className="text-[10px] opacity-60">总参与</p></div>
                   <div><p className="text-2xl font-bold">{userData?.is_verified ? 'V' : 'X'}</p><p className="text-[10px] opacity-60">校友</p></div>
                 </div>
               </div>
               <Zap className="absolute right-[-20px] top-[-20px] opacity-20 rotate-12" size={160} />
             </div>
+
+            {/* 成就系统卡片 */}
+            <AchievementCard />
 
             {/* 认证卡片 (仅当未认证时显示) */}
             {!userData?.is_verified && (
@@ -453,7 +477,7 @@ function App() {
                    ) : <div className="p-3 bg-gray-50 rounded-xl text-sm font-bold">{userData?.profile?.hobbies||"未填写"}</div>}
                 </div>
                 <div className="space-y-1">
-                   <label className="text-[10px] font-bold text-gray-400 uppercase">自我介绍 (目标)</label>
+                   <label className="text-[10px] font-bold text-gray-400 uppercase">自我介绍</label>
                    {isEditingProfile ? (
                      <textarea value={tempProfile.intro||""} onChange={e=>setTempProfile({...tempProfile, intro: e.target.value})} className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none h-24 resize-none" placeholder="想找什么样的搭子？"/>
                    ) : <div className="p-3 bg-gray-50 rounded-xl text-sm font-bold whitespace-pre-wrap">{userData?.profile?.intro||"未填写"}</div>}
@@ -461,12 +485,24 @@ function App() {
               </div>
             </div>
 
-            {/* 管理操作 */}
+            {/* 历史记录：不再是混在一起的，而是分两个 Tab */}
             <div className="flex justify-between items-end pl-2 pr-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">My History</h3>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Activity History</h3>
               <button onClick={() => setShowHiddenItems(!showHiddenItems)} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${showHiddenItems ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-400"}`}>{showHiddenItems ? <><Eye size={12}/> 隐藏</> : <><EyeOff size={12}/> 显示</>}</button>
             </div>
-            <div>{myActivities.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">空空如也</div>}{myActivities.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}</div>
+            
+            {/* 🚩 我发起的 */}
+            <div className="space-y-4">
+              <h4 className="font-bold text-lg flex items-center gap-2">🚩 我发起的 <span className="text-gray-300 text-sm font-normal">({myCreatedList.length})</span></h4>
+              <div>{myCreatedList.length === 0 && <div className="p-6 bg-gray-50 rounded-2xl text-center text-gray-400 text-sm font-bold border border-dashed">还没发过活动</div>}{myCreatedList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}</div>
+            </div>
+
+            {/* 🙋 我参与的 */}
+            <div className="space-y-4 pt-4 border-t border-gray-100">
+              <h4 className="font-bold text-lg flex items-center gap-2">🙋 我参与的 <span className="text-gray-300 text-sm font-normal">({myJoinedList.length})</span></h4>
+              <div>{myJoinedList.length === 0 && <div className="p-6 bg-gray-50 rounded-2xl text-center text-gray-400 text-sm font-bold border border-dashed">还没参加过活动</div>}{myJoinedList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}</div>
+            </div>
+
             <div className="mt-8 mb-4 flex justify-center"><button onClick={handleLogout} className="px-6 py-2 bg-gray-100 text-gray-400 rounded-full font-bold text-xs hover:bg-red-50 hover:text-red-500 transition-colors">退出登录</button></div>
           </div>
         )}
@@ -487,7 +523,6 @@ function App() {
             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div>
             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
             
-            {/* 时间选择器 */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
               <div className="flex gap-2 items-center">
@@ -504,7 +539,6 @@ function App() {
             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
             <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
             
-            {/* 🆕 认证限制开关 */}
             <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><ShieldCheck size={20}/></div>
