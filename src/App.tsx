@@ -127,6 +127,7 @@ function App() {
     if (!currentUser) return "";
     return localStorage.getItem(`club_secret_badge_${currentUser}`) || "";
   });
+  const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
 
@@ -724,9 +725,30 @@ function App() {
             {/* 头部卡片 */}
             <div className={`rounded-[2.5rem] p-8 shadow-xl relative overflow-hidden text-white transition-colors duration-500 ${theme.primary}`}>
               <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <h1 className="text-2xl font-bold">{currentUser}</h1>
-                  {userData?.is_verified ? <div className="px-2 py-1 bg-yellow-400 text-yellow-900 text-[10px] font-black rounded-md flex items-center gap-1"><ShieldCheck size={12}/> 已认证</div> : <div className="px-2 py-1 bg-black/20 text-white/70 text-[10px] font-bold rounded-md flex items-center gap-1"><Shield size={12}/> 未认证</div>}
+
+                  {/* ✅ 隐藏成就徽章：抽到才显示 */}
+                  {secretBadge && (
+                    <span
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 ${
+                        isFounder ? "bg-yellow-400 text-yellow-950" : "bg-black/20 text-white/90"
+                      }`}
+                    >
+                      <Sparkles size={12} className={isFounder ? "text-yellow-900" : "text-yellow-300"} />
+                      {secretBadge}
+                    </span>
+                  )}
+
+                  {userData?.is_verified ? (
+                    <div className="px-2 py-1 bg-yellow-400 text-yellow-900 text-[10px] font-black rounded-md flex items-center gap-1">
+                      <ShieldCheck size={12}/> 已认证
+                    </div>
+                  ) : (
+                    <div className="px-2 py-1 bg-black/20 text-white/70 text-[10px] font-bold rounded-md flex items-center gap-1">
+                      <Shield size={12}/> 未认证
+                    </div>
+                  )}
                 </div>
                 <p className="text-white/80 text-sm mb-6">{userData?.profile?.intro || "这个人很懒，还没写自我介绍..."}</p>
                 <div className="flex gap-4 text-center">
