@@ -40,7 +40,7 @@ interface Activity {
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
-  status?: 'active' | 'locked' | 'cancelled' | 'done' | 'completed' | 'deleted';
+  status?: 'active' | 'locked' | 'done' | 'deleted';
   requires_verification?: boolean;
 }
 
@@ -151,7 +151,8 @@ function App() {
       if (!related) return false;
       const hidden = (a.hidden_by || []).includes(currentUser);
       if (hidden) return false;
-      return ['active', 'locked', 'cancelled'].includes(a.status || 'active');
+      const st = a.status || 'active';
+      return st === 'active' || st === 'locked' || st === 'deleted';
     });
   }, [activities, currentUser]);
 
@@ -161,7 +162,7 @@ function App() {
       if (!related) return false;
       const hidden = (a.hidden_by || []).includes(currentUser);
       if (hidden) return false;
-      return a.status === 'done';
+      return (a.status || 'active') === 'done';
     });
   }, [activities, currentUser]);
 
@@ -222,23 +223,15 @@ function App() {
     } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
-  const handleToggleRecruit = async (activityId: string) => {
+  const handleToggleLock = async (activityId: string) => {
     setIsLoading(true);
     try {
-      const res = await cloud.invoke("toggle-recruitment", { activityId, username: currentUser });
-      if (res.ok) fetchActivities();
-      else alert(res.msg);
-    } finally { setIsLoading(false); }
-  };
-
-  const handleCancel = async (activityId: string) => {
-    if (!window.confirm("确定取消/解散？参与者会看到活动失效提醒")) return;
-    setIsLoading(true);
-    try {
-      const res = await cloud.invoke("cancel-activity", { activityId, username: currentUser });
-      if (res.ok) fetchActivities();
-      else alert(res.msg);
-    } finally { setIsLoading(false); }
+      const res = await cloud.invoke("toggle-lock", { activityId, username: currentUser });
+      if (res?.ok) fetchActivities();
+      else alert(res?.msg || "操作失败");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteActivity = async (activityId: string) => {
@@ -255,25 +248,31 @@ function App() {
   };
 
   const handleCompleteActivity = async (activityId: string) => {
-    if (!window.confirm("确定完成活动？完成后将从广场消失")) return;
+    if (!window.confirm("确定完成活动？完成后将从广场消失并加入历史")) return;
     setIsLoading(true);
     try {
       const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
       if (res?.ok) {
-        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'completed' } : a));
+        setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: 'done' } : a));
+        fetchUserData(currentUser);
       } else alert(res?.msg || "操作失败");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAckCancelled = async (activityId: string) => {
+  const handleAckDeleted = async (activityId: string) => {
     setIsLoading(true);
     try {
-      const res = await cloud.invoke("ack-cancelled", { activityId, username: currentUser });
-      if (res.ok) fetchActivities();
-      else alert(res.msg);
-    } finally { setIsLoading(false); }
+      const res = await cloud.invoke("ack-activity-deleted", { activityId, username: currentUser });
+      if (res?.ok) {
+        fetchActivities();
+      } else {
+        alert(res?.msg || "操作失败");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const sendCode = async () => {
@@ -353,8 +352,7 @@ function App() {
     const minP = activity.min_people || 1;
     const status = activity.status || 'active';
     const isDeleted = status === 'deleted';
-    const isDone = status === 'done' || status === 'completed';
-    const isCancelled = status === 'cancelled';
+    const isDone = status === 'done';
     const isLocked = status === 'locked';
     const isActive = status === 'active';
     const isHidden = (activity.hidden_by || []).includes(currentUser);
@@ -364,20 +362,12 @@ function App() {
 
     const actionButtons: React.ReactNode[] = [];
 
-    if (isGhost) {
-      actionButtons.push(
-        <button key="restore" onClick={() => handleCommonOp("restore-activity", activity._id, "恢复?")} className="px-6 py-2 rounded-xl text-sm font-bold transition-all bg-gray-800 text-white">
-          恢复
-        </button>
-      );
-    } else if (isAuthor) {
+    if (isAuthor) {
       if (isDone) {
         actionButtons.push(<button key="done" className="px-6 py-2 rounded-xl text-sm font-bold bg-green-100 text-green-600 cursor-default" disabled>已完成</button>);
-      } else if (isCancelled) {
-        actionButtons.push(<button key="cancelled" className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500 cursor-default" disabled>已取消</button>);
       } else if (isLocked) {
         actionButtons.push(
-          <button key="reopen" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow">
+          <button key="reopen" onClick={() => handleToggleLock(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow">
             撤回继续召集
           </button>
         );
@@ -389,7 +379,7 @@ function App() {
       } else if (isActive) {
         if (canFinish) {
           actionButtons.push(
-            <button key="lock" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow-md">
+            <button key="lock" onClick={() => handleToggleLock(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow-md">
               结束召集
             </button>
           );
@@ -397,17 +387,10 @@ function App() {
           actionButtons.push(<button key="recruiting" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-400 cursor-default" disabled>招募中</button>);
         }
       }
-      if (!isDone && !isCancelled && !isDeleted) {
-        actionButtons.push(
-          <button key="cancel" onClick={() => handleCancel(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
-            取消/解散
-          </button>
-        );
-      }
     } else {
-      if (isCancelled) {
+      if (isDeleted) {
         actionButtons.push(
-          <button key="ack" onClick={() => handleAckCancelled(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-500">
+          <button key="ack" onClick={() => handleAckDeleted(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-500">
             知道了
           </button>
         );
