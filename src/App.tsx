@@ -24,6 +24,7 @@ interface UserData {
   is_verified?: boolean;
   edu_email?: string;
   profile?: UserProfile;
+  stats?: { completed_count?: number };
 }
 
 interface Activity {
@@ -39,7 +40,7 @@ interface Activity {
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
-  status?: 'active' | 'deleted' | 'completed';
+  status?: 'active' | 'locked' | 'cancelled' | 'done' | 'completed' | 'deleted';
   requires_verification?: boolean;
 }
 
@@ -55,7 +56,7 @@ type ThemeKey = keyof typeof THEMES;
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activeTab, setActiveTab] = useState<"square" | "my_activities" | "profile">("square");
-  const [activitySubTab, setActivitySubTab] = useState<"created" | "joined" | "trash">("created"); // 先留着，Step B 用
+  const [activitySubTab, setActivitySubTab] = useState<"ongoing" | "history">("ongoing");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -141,40 +142,26 @@ function App() {
   };
 
   // --- 统计数据 ---
-  const userActivityCount = useMemo(() => {
-    if (!currentUser) return 0;
-    // 参与次数 = 我发布的 + 我加入的 (不去重，只要是有效的活动)
-    return activities.filter(a => (a.author === currentUser || (a.joined_users || []).includes(currentUser)) && a.status !== 'deleted').length;
-  }, [activities, currentUser]);
+  const userActivityCount = userData?.stats?.completed_count || 0;
 
   // --- 拆分列表 ---
-  const myCreatedList = useMemo(() => {
+  const myOngoingList = useMemo(() => {
     return activities.filter(a => {
-      const isMine = a.author === currentUser;
-      const isDeleted = a.status === 'deleted';
-      return isMine && !isDeleted;
-    });
-  }, [activities, currentUser]);
-
-  const myJoinedList = useMemo(() => {
-    return activities.filter(a => {
-      // 注意：排除掉自己发起的，只算“参与别人”的
-      const isJoined = a.author !== currentUser && (a.joined_users || []).includes(currentUser);
-      const isHidden = (a.hidden_by || []).includes(currentUser);
-      const isDeleted = a.status === 'deleted';
-      return isJoined && !isHidden && !isDeleted;
-    });
-  }, [activities, currentUser]);
-
-  // 回收站：我隐藏的或我解散的
-  const myTrashList = useMemo(() => {
-    return activities.filter(a => {
-      const isMineOrJoined = a.author === currentUser || (a.joined_users || []).includes(currentUser);
-      if (!isMineOrJoined) return false;
-
+      const related = a.author === currentUser || (a.joined_users || []).includes(currentUser);
+      if (!related) return false;
       const hidden = (a.hidden_by || []).includes(currentUser);
-      const deletedByMe = a.author === currentUser && a.status === 'deleted';
-      return hidden || deletedByMe;
+      if (hidden) return false;
+      return ['active', 'locked', 'cancelled'].includes(a.status || 'active');
+    });
+  }, [activities, currentUser]);
+
+  const myHistoryList = useMemo(() => {
+    return activities.filter(a => {
+      const related = a.author === currentUser || (a.joined_users || []).includes(currentUser);
+      if (!related) return false;
+      const hidden = (a.hidden_by || []).includes(currentUser);
+      if (hidden) return false;
+      return a.status === 'done';
     });
   }, [activities, currentUser]);
 
@@ -223,17 +210,6 @@ function App() {
     } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
-  const handleToggleComplete = async (activityId: string, currentStatus: string) => {
-    const isCompleting = currentStatus !== 'completed';
-    if (!window.confirm(isCompleting ? "🎉 确认成团？" : "↩️ 撤回完成状态？")) return;
-    setIsLoading(true);
-    try {
-      const res = await cloud.invoke("toggle-complete", { activityId, username: currentUser });
-      if (res.ok) setActivities(prev => prev.map(a => a._id === activityId ? { ...a, status: res.status } : a));
-      else alert(res.msg);
-    } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
-  };
-
   const handleCommonOp = async (opName: string, activityId: string, confirmMsg: string) => {
     if (!window.confirm(confirmMsg)) return;
     setIsLoading(true);
@@ -242,6 +218,44 @@ function App() {
       if (res.ok) { fetchActivities(); if(opName==='hide-activity') setActivities(prev=>prev.filter(a=>a._id!==activityId)); } 
       else alert(res.msg || "失败");
     } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
+  };
+
+  const handleToggleRecruit = async (activityId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("toggle-recruitment", { activityId, username: currentUser });
+      if (res.ok) fetchActivities();
+      else alert(res.msg);
+    } finally { setIsLoading(false); }
+  };
+
+  const handleComplete = async (activityId: string) => {
+    if (!window.confirm("确定完成活动？完成后会进入历史，且参与次数+1")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("complete-activity", { activityId, username: currentUser });
+      if (res.ok) { fetchActivities(); fetchUserData(currentUser); }
+      else alert(res.msg);
+    } finally { setIsLoading(false); }
+  };
+
+  const handleCancel = async (activityId: string) => {
+    if (!window.confirm("确定取消/解散？参与者会看到活动失效提醒")) return;
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("cancel-activity", { activityId, username: currentUser });
+      if (res.ok) fetchActivities();
+      else alert(res.msg);
+    } finally { setIsLoading(false); }
+  };
+
+  const handleAckCancelled = async (activityId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("ack-cancelled", { activityId, username: currentUser });
+      if (res.ok) fetchActivities();
+      else alert(res.msg);
+    } finally { setIsLoading(false); }
   };
 
   const sendCode = async () => {
@@ -319,33 +333,89 @@ function App() {
     const isAuthor = activity.author === currentUser; 
     const isFull = joined.length >= activity.max_people;
     const minP = activity.min_people || 1;
-    const isDeleted = activity.status === 'deleted';
-    const isCompleted = activity.status === 'completed'; 
+    const status = activity.status || 'active';
+    const isDeleted = status === 'deleted';
+    const isDone = status === 'done' || status === 'completed';
+    const isCancelled = status === 'cancelled';
+    const isLocked = status === 'locked';
+    const isActive = status === 'active';
     const isHidden = (activity.hidden_by || []).includes(currentUser);
     const isGhost = isDeleted || isHidden;
     const hasOthers = joined.length > 1;
     const canFinish = joined.length >= minP;
 
-    let btnText = "加入"; let btnDisabled = false; let btnStyle = `${theme.primary} text-white shadow-md active:scale-95`;
-    let onClick = () => handleJoin(activity._id);
+    const actionButtons: React.ReactNode[] = [];
 
-    if (isGhost) { btnText = "恢复"; btnStyle = "bg-gray-800 text-white"; onClick = () => handleCommonOp("restore-activity", activity._id, "恢复?"); }
-    else if (isDeleted) { btnText = "已解散"; btnDisabled = true; btnStyle = "bg-red-50 text-red-500"; }
-    else if (isCompleted) {
-      if (isAuthor) { btnText = "撤回完成"; btnStyle = "bg-yellow-400 text-yellow-900"; onClick = () => handleToggleComplete(activity._id, 'completed'); }
-      else { btnText = "组局成功"; btnDisabled = true; btnStyle = "bg-green-100 text-green-600"; }
+    if (isGhost) {
+      actionButtons.push(
+        <button key="restore" onClick={() => handleCommonOp("restore-activity", activity._id, "恢复?")} className="px-6 py-2 rounded-xl text-sm font-bold transition-all bg-gray-800 text-white">
+          恢复
+        </button>
+      );
     } else if (isAuthor) {
-      if (canFinish) { btnText = "人齐发车"; btnStyle = "bg-green-500 text-white animate-pulse"; onClick = () => handleToggleComplete(activity._id, 'active'); }
-      else { btnText = `还差 ${minP - joined.length} 人`; btnDisabled = true; btnStyle = "bg-gray-100 text-gray-400"; }
+      if (isDone) {
+        actionButtons.push(<button key="done" className="px-6 py-2 rounded-xl text-sm font-bold bg-green-100 text-green-600 cursor-default" disabled>已完成</button>);
+      } else if (isCancelled) {
+        actionButtons.push(<button key="cancelled" className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500 cursor-default" disabled>已取消</button>);
+      } else if (isLocked) {
+        actionButtons.push(
+          <button key="reopen" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow">
+            撤回继续召集
+          </button>
+        );
+        actionButtons.push(
+          <button key="complete" onClick={() => handleComplete(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow">
+            确定完成
+          </button>
+        );
+      } else if (isActive) {
+        if (canFinish) {
+          actionButtons.push(
+            <button key="lock" onClick={() => handleToggleRecruit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-green-500 text-white shadow-md">
+              结束召集
+            </button>
+          );
+        } else {
+          actionButtons.push(<button key="recruiting" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-400 cursor-default" disabled>招募中</button>);
+        }
+      }
+      if (!isDone && !isCancelled && !isDeleted) {
+        actionButtons.push(
+          <button key="cancel" onClick={() => handleCancel(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
+            取消/解散
+          </button>
+        );
+      }
     } else {
-      if (isJoined) { btnText = "退出"; btnStyle = "bg-red-50 text-red-500"; onClick = () => handleQuit(activity._id); }
-      else if (isFull) { btnText = "已满员"; btnDisabled = true; btnStyle = "bg-gray-200 text-gray-400"; }
+      if (isCancelled) {
+        actionButtons.push(
+          <button key="ack" onClick={() => handleAckCancelled(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-500">
+            知道了
+          </button>
+        );
+      } else if (isJoined) {
+        actionButtons.push(
+          <button key="quit" onClick={() => handleQuit(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
+            退出
+          </button>
+        );
+      } else if (showJoinBtn) {
+        if (isFull) {
+          actionButtons.push(<button key="full" className="px-6 py-2 rounded-xl text-sm font-bold bg-gray-200 text-gray-400 cursor-not-allowed" disabled>已满员</button>);
+        } else {
+          actionButtons.push(
+            <button key="join" onClick={() => handleJoin(activity._id)} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${theme.primary} text-white shadow-md active:scale-95`}>
+              加入
+            </button>
+          );
+        }
+      }
     }
 
     return (
-      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""} ${isCompleted && !isGhost ? "border-l-4 border-l-green-500" : ""}`}>
+      <div className={`${theme.card} rounded-[2rem] p-6 shadow-sm border ${theme.border} mb-4 relative ${isGhost ? "opacity-60 grayscale border-dashed" : ""} ${isDone && !isGhost ? "border-l-4 border-l-green-500" : ""}`}>
         {!isGhost && isAuthor && showJoinBtn && (hasOthers ? <button onClick={() => handleQuit(activity._id)} className="absolute top-6 right-6 p-2 bg-red-50 text-red-500 rounded-full"><LogOut size={16} /></button> : <button onClick={() => handleCommonOp("delete-activity", activity._id, "解散?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Trash2 size={16} /></button>)}
-        {!isGhost && showSweepBtn && (isDeleted || isExpired(activity) || isCompleted) && <button onClick={() => handleCommonOp("hide-activity", activity._id, "移除?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Eraser size={16} /></button>}
+        {!isGhost && showSweepBtn && (isDeleted || isExpired(activity) || isDone) && <button onClick={() => handleCommonOp("hide-activity", activity._id, "移除?")} className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full"><Eraser size={16} /></button>}
         
         <div className="flex justify-between items-start mb-3 pr-10">
           <div className="flex gap-2 items-center mb-1">
@@ -360,7 +430,9 @@ function App() {
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-bold"><MapPin size={14}/> {activity.location}</div>
-                {showJoinBtn && <button onClick={onClick} disabled={btnDisabled} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${btnStyle}`}>{btnText}</button>}
+                <div className="flex gap-2 flex-wrap justify-end">
+                  {actionButtons}
+                </div>
             </div>
         </div>
       </div>
@@ -419,67 +491,36 @@ function App() {
         {activeTab === 'my_activities' && (
           <div className="animate-fade-in space-y-6">
             <div className="flex p-1 bg-white rounded-2xl shadow-sm border border-gray-100">
-              <button onClick={() => setActivitySubTab('created')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'created' ? "bg-black text-white shadow" : "text-gray-400"}`}>
-                我发起的 ({myCreatedList.length})
+              <button onClick={() => setActivitySubTab('ongoing')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${activitySubTab==='ongoing' ? 'bg-black text-white shadow' : 'text-gray-400'}`}>
+                正在进行 ({myOngoingList.length})
               </button>
-              <button onClick={() => setActivitySubTab('joined')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'joined' ? "bg-black text-white shadow" : "text-gray-400"}`}>
-                我参与的 ({myJoinedList.length})
-              </button>
-              <button onClick={() => setActivitySubTab('trash')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'trash' ? "bg-red-50 text-red-600" : "text-gray-300"}`}>
-                🗑 回收站
+              <button onClick={() => setActivitySubTab('history')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold ${activitySubTab==='history' ? 'bg-black text-white shadow' : 'text-gray-400'}`}>
+                历史活动 ({myHistoryList.length})
               </button>
             </div>
 
-            {activitySubTab === 'created' && (
+            {activitySubTab === 'ongoing' && (
               <div>
-                {myCreatedList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">还没发起过活动</div>}
-                {myCreatedList.map(a => (
-                  <ActivityCard key={a._id} activity={a} showJoinBtn={false} showSweepBtn={true} />
+                {myOngoingList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">暂无进行中的活动</div>}
+                {myOngoingList.map(a => (
+                  <ActivityCard key={a._id} activity={a} showJoinBtn={false} showSweepBtn={false} />
                 ))}
               </div>
             )}
 
-            {activitySubTab === 'joined' && (
+            {activitySubTab === 'history' && (
               <div>
-                {myJoinedList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">还没参与过活动</div>}
-                {myJoinedList.map(a => (
-                  <ActivityCard key={a._id} activity={a} showJoinBtn={false} showSweepBtn={true} />
-                ))}
-              </div>
-            )}
-
-            {activitySubTab === 'trash' && (
-              <div>
-                <div className="mb-4 bg-orange-50 text-orange-600 p-4 rounded-xl text-xs font-bold leading-relaxed">
-                  💡 这里是你移除/隐藏或解散的活动。你可以【恢复】它们。
-                  <br />
-                  （永久删除建议最后再上，等鉴权做完）
-                </div>
-
-                {myTrashList.length === 0 && (
-                  <div className="text-center py-12 text-gray-300 font-bold">回收站是空的</div>
-                )}
-
-                {myTrashList.map(a => (
-                  <div key={a._id} className="relative">
+                {myHistoryList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">还没有历史活动</div>}
+                {myHistoryList.map(a => (
+                  <div key={a._id}>
                     <ActivityCard activity={a} showJoinBtn={false} showSweepBtn={false} />
-                    <div className="flex gap-2 justify-end -mt-2 mb-6">
+                    <div className="flex justify-end -mt-2 mb-6">
                       <button
-                        onClick={() => handleCommonOp("restore-activity", a._id, "恢复这个活动？")}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold"
+                        onClick={() => handleCommonOp("hide-activity", a._id, "移除这条回忆？（仅对你隐藏）")}
+                        className="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-xs font-bold"
                       >
-                        恢复
+                        移除
                       </button>
-
-                      {/* 永久删除先别开，等你鉴权做完再放出来 */}
-                      {/* {a.author === currentUser && (
-                        <button
-                          onClick={() => handleCommonOp("hard-delete-activity", a._id, "⚠️ 永久删除不可恢复，确定？")}
-                          className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold"
-                        >
-                          永久删除
-                        </button>
-                      )} */}
                     </div>
                   </div>
                 ))}
