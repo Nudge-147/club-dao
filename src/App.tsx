@@ -236,7 +236,17 @@ function App() {
     if(!verifyCode) return;
     try {
       const res = await cloud.invoke("verify-email", { type: 'verify', email: verifyEmail, code: verifyCode, username: currentUser });
-      if (res.ok) { alert("认证成功！"); fetchUserData(currentUser); } else alert(res.msg);
+      if (res.ok) { 
+        alert("认证成功！");
+        
+        // ✨ 新增这两行：手动更新本地状态，不需要等网络请求
+        setUserData(prev => prev ? { ...prev, is_verified: true, edu_email: verifyEmail } : null);
+        
+        // 原来的逻辑保留，作为双重保险
+        fetchUserData(currentUser); 
+      } else {
+        alert(res.msg);
+      }
     } catch(e) { alert("验证失败"); }
   };
 
