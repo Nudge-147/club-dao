@@ -676,21 +676,27 @@ function App() {
 
           <div className="flex flex-col leading-tight">
             <div className="flex items-center gap-2">
-      <span className={`font-bold text-xl ${theme.primaryText}`}>
-        {activeTab === "square" ? "ClubDAO" : activeTab === "my_activities" ? "我的局" : "我的"}
-      </span>
+              <span className={`font-bold text-xl ${theme.primaryText}`}>
+                {activeTab === "square"
+                  ? "ClubDAO"
+                  : activeTab === "my_activities"
+                  ? "我的局"
+                  : "我的"}
+              </span>
 
-      <span className="px-2 py-1 rounded-md bg-black text-white text-[10px] font-black flex items-center gap-1">
-        <BadgeCheck size={12} />
-        官方出品
-      </span>
-    </div>
+              {/* 官方出品标识 */}
+              <span className="px-2 py-1 rounded-md bg-black text-white text-[10px] font-black flex items-center gap-1">
+                <BadgeCheck size={12} />
+                官方出品
+              </span>
+            </div>
 
-    <span className="text-[10px] text-gray-500 font-black">
-      南京大学区块链+AI大模型金科大赛社团 · 官方推出
-    </span>
-  </div>
-</div>
+            {/* 官方主体名称（唯一权威来源） */}
+            <span className="text-[10px] text-gray-500 font-black">
+              南京大学区块链 + AI 与金融科技创新俱乐部 · 官方推出
+            </span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -714,7 +720,7 @@ function App() {
           <div className="animate-fade-in space-y-6">
             <div className="relative group"><Search className="absolute left-4 top-3.5 text-gray-400" size={20} /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="寻找下一场活动..." className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl font-bold outline-none shadow-sm" /></div>
 
-            {/* ✅ 社团官方推出公告 */}
+            {/* 社团官方公告 */}
             <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -724,11 +730,12 @@ function App() {
 
                   <div>
                     <div className="font-black text-sm text-gray-900">
-                      南京大学区块链+AI大模型金科大赛社团 · 官方推出
+                      南京大学区块链 + AI 与金融科技创新俱乐部 · 官方推出
                     </div>
 
                     <div className="text-xs text-gray-500 font-bold mt-1 leading-relaxed">
-                      校园认证后解锁「官方社群入口」隐藏成就，并可随机抽取限定徽章（盲盒）。
+                      本平台为俱乐部官方活动与社群入口。  
+                      校园邮箱认证后可解锁隐藏成就，并随机获得限定徽章（盲盒）。
                     </div>
 
                     <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-black">
