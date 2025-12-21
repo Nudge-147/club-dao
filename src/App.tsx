@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Trash2, Eraser, Eye, EyeOff, LogOut, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Trash2, Eraser, LogOut, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -54,13 +54,13 @@ type ThemeKey = keyof typeof THEMES;
 
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [activeTab, setActiveTab] = useState<"square" | "profile">("square");
+  const [activeTab, setActiveTab] = useState<"square" | "my_activities" | "profile">("square");
+  const [activitySubTab, setActivitySubTab] = useState<"created" | "joined" | "trash">("created"); // 先留着，Step B 用
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
-  const [showHiddenItems, setShowHiddenItems] = useState(false);
   const [inputTimeStr, setInputTimeStr] = useState("");
 
   const [currentUser, setCurrentUser] = useState<string>("");
@@ -152,9 +152,9 @@ function App() {
     return activities.filter(a => {
       const isMine = a.author === currentUser;
       const isDeleted = a.status === 'deleted';
-      return isMine && (showHiddenItems ? true : !isDeleted);
+      return isMine && !isDeleted;
     });
-  }, [activities, currentUser, showHiddenItems]);
+  }, [activities, currentUser]);
 
   const myJoinedList = useMemo(() => {
     return activities.filter(a => {
@@ -162,9 +162,9 @@ function App() {
       const isJoined = a.author !== currentUser && (a.joined_users || []).includes(currentUser);
       const isHidden = (a.hidden_by || []).includes(currentUser);
       const isDeleted = a.status === 'deleted';
-      return isJoined && (showHiddenItems ? true : (!isHidden && !isDeleted));
+      return isJoined && !isHidden && !isDeleted;
     });
-  }, [activities, currentUser, showHiddenItems]);
+  }, [activities, currentUser]);
 
   const isExpired = (activity: Activity) => {
     if (!activity.time) return false;
@@ -404,6 +404,46 @@ function App() {
           </div>
         )}
         
+        {activeTab === 'my_activities' && (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex p-1 bg-white rounded-2xl shadow-sm border border-gray-100">
+              <button onClick={() => setActivitySubTab('created')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'created' ? "bg-black text-white shadow" : "text-gray-400"}`}>
+                我发起的 ({myCreatedList.length})
+              </button>
+              <button onClick={() => setActivitySubTab('joined')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'joined' ? "bg-black text-white shadow" : "text-gray-400"}`}>
+                我参与的 ({myJoinedList.length})
+              </button>
+              <button onClick={() => setActivitySubTab('trash')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${activitySubTab === 'trash' ? "bg-red-50 text-red-600" : "text-gray-300"}`}>
+                🗑 回收站
+              </button>
+            </div>
+
+            {activitySubTab === 'created' && (
+              <div>
+                {myCreatedList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">还没发起过活动</div>}
+                {myCreatedList.map(a => (
+                  <ActivityCard key={a._id} activity={a} showJoinBtn={false} showSweepBtn={true} />
+                ))}
+              </div>
+            )}
+
+            {activitySubTab === 'joined' && (
+              <div>
+                {myJoinedList.length === 0 && <div className="text-center py-12 text-gray-300 font-bold">还没参与过活动</div>}
+                {myJoinedList.map(a => (
+                  <ActivityCard key={a._id} activity={a} showJoinBtn={false} showSweepBtn={true} />
+                ))}
+              </div>
+            )}
+
+            {activitySubTab === 'trash' && (
+              <div className="text-center py-12 text-gray-300 font-bold">
+                回收站功能下一步加
+              </div>
+            )}
+          </div>
+        )}
+        
         {activeTab === 'profile' && (
           <div className="animate-fade-in space-y-6">
             {/* 头部卡片 */}
@@ -486,23 +526,6 @@ function App() {
             </div>
 
             {/* 历史记录：不再是混在一起的，而是分两个 Tab */}
-            <div className="flex justify-between items-end pl-2 pr-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Activity History</h3>
-              <button onClick={() => setShowHiddenItems(!showHiddenItems)} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all ${showHiddenItems ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-400"}`}>{showHiddenItems ? <><Eye size={12}/> 隐藏</> : <><EyeOff size={12}/> 显示</>}</button>
-            </div>
-            
-            {/* 🚩 我发起的 */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-lg flex items-center gap-2">🚩 我发起的 <span className="text-gray-300 text-sm font-normal">({myCreatedList.length})</span></h4>
-              <div>{myCreatedList.length === 0 && <div className="p-6 bg-gray-50 rounded-2xl text-center text-gray-400 text-sm font-bold border border-dashed">还没发过活动</div>}{myCreatedList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}</div>
-            </div>
-
-            {/* 🙋 我参与的 */}
-            <div className="space-y-4 pt-4 border-t border-gray-100">
-              <h4 className="font-bold text-lg flex items-center gap-2">🙋 我参与的 <span className="text-gray-300 text-sm font-normal">({myJoinedList.length})</span></h4>
-              <div>{myJoinedList.length === 0 && <div className="p-6 bg-gray-50 rounded-2xl text-center text-gray-400 text-sm font-bold border border-dashed">还没参加过活动</div>}{myJoinedList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={false} showSweepBtn={true} />)}</div>
-            </div>
-
             <div className="mt-8 mb-4 flex justify-center"><button onClick={handleLogout} className="px-6 py-2 bg-gray-100 text-gray-400 rounded-full font-bold text-xs hover:bg-red-50 hover:text-red-500 transition-colors">退出登录</button></div>
           </div>
         )}
@@ -510,7 +533,11 @@ function App() {
 
       {/* 悬浮按钮与底部导航 */}
       {activeTab === 'square' && (<button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20"><button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button><button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'profile' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'profile' ? 3 : 2} /><span className="text-[10px] font-bold">我的</span></button></div>
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
+        <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button>
+        <button onClick={() => setActiveTab('my_activities')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'my_activities' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'my_activities' ? 3 : 2} /><span className="text-[10px] font-bold">我的局</span></button>
+        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'profile' ? theme.navActive : theme.navInactive}`}><User size={24} strokeWidth={activeTab === 'profile' ? 3 : 2} /><span className="text-[10px] font-bold">我的</span></button>
+      </div>
 
       {/* 主题弹窗 */}
       {showThemeModal && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up"><h3 className="text-xl font-black mb-6 text-center">选择界面风格</h3><div className="grid grid-cols-3 gap-4"><button onClick={() => handleSetTheme("warm")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='warm'?'border-orange-500 bg-orange-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-orange-500 shadow-md"></div><span className="text-xs font-bold">暖阳橙</span></button><button onClick={() => handleSetTheme("cool")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='cool'?'border-blue-500 bg-blue-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-blue-500 shadow-md"></div><span className="text-xs font-bold">清凉蓝</span></button><button onClick={() => handleSetTheme("nju")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='nju'?'border-purple-800 bg-purple-50':'border-transparent bg-gray-50'} relative overflow-hidden`}><div className="w-8 h-8 rounded-full bg-[#6A005F] shadow-md flex items-center justify-center">{userActivityCount < 10 && <Lock size={14} className="text-white/50"/>}</div><span className="text-xs font-bold text-[#6A005F]">南大紫</span></button></div><button onClick={() => setShowThemeModal(false)} className="w-full mt-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">关闭</button></div></div>)}
