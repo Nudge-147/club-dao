@@ -1,7 +1,7 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -668,12 +668,84 @@ function App() {
     <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
       {showLoginModal && (<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"><div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center"><h2 className="text-3xl font-black mb-8">ClubDAO</h2>{loginStep==="inputName"&&(<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>)}{loginStep==="nameTaken"&&(<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl text-sm font-bold">该代号已存在</div><button onClick={()=>setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold">是本人，去登录</button><button onClick={resetToInputName} className="w-full bg-white border p-4 rounded-xl font-bold">换个名字</button></div>)}{loginStep==="inputPassword"&&( <form onSubmit={handleLogin}><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>)}{loginStep==="createAccount"&&(<form onSubmit={handleRegister}><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设个密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册并登录</button></form>)}{loginError&&<p className="text-red-500 mt-4 font-bold">{loginError}</p>}</div></div>)}
       
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center"><div className="flex items-center gap-2"><div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg ${theme.primary}`}>C</div><span className={`font-bold text-xl ${theme.primaryText}`}>{activeTab==='square'?'ClubDAO':'我的档案'}</span></div><div className="flex items-center gap-3"><button onClick={()=>setShowThemeModal(true)} className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center"><Palette size={14}/></button><div className="bg-white border px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-sm"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${theme.accent}`}><User size={14}/></div>{currentUser}</div></div></nav>
+      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg ${theme.primary}`}>
+            C
+          </div>
+
+          <div className="flex flex-col leading-tight">
+            <div className="flex items-center gap-2">
+              <span className={`font-bold text-xl ${theme.primaryText}`}>
+                {activeTab === "square" ? "ClubDAO" : activeTab === "my_activities" ? "我的局" : "我的档案"}
+              </span>
+
+              <span className="px-2 py-1 rounded-md bg-green-100 text-green-700 text-[10px] font-black flex items-center gap-1">
+                <BadgeCheck size={12} />
+                官方合作
+              </span>
+            </div>
+
+            <span className="text-[10px] text-gray-400 font-bold">
+              南京大学 区块链 + AI 大模型金科大赛社团
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowThemeModal(true)}
+            className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center"
+          >
+            <Palette size={14} />
+          </button>
+
+          <div className="bg-white border px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-sm">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${theme.accent}`}>
+              <User size={14} />
+            </div>
+            {currentUser}
+          </div>
+        </div>
+      </nav>
       
       <main className="p-6 max-w-md mx-auto space-y-6">
         {activeTab === 'square' && (
           <div className="animate-fade-in space-y-6">
             <div className="relative group"><Search className="absolute left-4 top-3.5 text-gray-400" size={20} /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="寻找下一场活动..." className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl font-bold outline-none shadow-sm" /></div>
+
+            {/* ✅ 合作公告卡片 */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${theme.primary}`}>
+                    <Megaphone size={18} />
+                  </div>
+
+                  <div>
+                    <div className="font-black text-sm text-gray-900">
+                      南京大学区块链 + AI 大模型金科大赛社团 · 官方合作
+                    </div>
+
+                    <div className="text-xs text-gray-500 font-bold mt-1 leading-relaxed">
+                      校园认证后可解锁「官方社群入口」隐藏成就与随机限定徽章（盲盒）。
+                    </div>
+
+                    <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-black">
+                      ⏳ 限时开放：12 月 28 日截止
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveTab("profile")}
+                  className="px-4 py-2 rounded-xl bg-black text-white text-xs font-black active:scale-95 whitespace-nowrap"
+                >
+                  去领取
+                </button>
+              </div>
+            </div>
+
             <div className="flex p-1.5 bg-white rounded-2xl shadow-sm gap-1">{(["全部", "约饭", "拼单"] as const).map(cat => (<button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeCategory === cat ? `${theme.primary} text-white shadow-md` : "text-gray-400 hover:bg-gray-50"}`}>{cat}</button>))}</div>
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
           </div>
