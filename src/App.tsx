@@ -243,7 +243,7 @@ function App() {
         setUserData(prev => prev ? { ...prev, is_verified: true, edu_email: verifyEmail } : null);
         
         // 原来的逻辑保留，作为双重保险
-        fetchUserData(currentUser); 
+        // fetchUserData(currentUser); 
       } else {
         alert(res.msg);
       }
