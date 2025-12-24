@@ -435,8 +435,27 @@ function App() {
       status: 'active',
       requirements: reqDraft
     };
-    const res = await cloud.invoke("create-activity", newActivity);
-    if (res && res.id) { setShowCreateModal(false); resetCreateFlow(); fetchActivities(); } else { alert("发布失败"); }
+
+    let res: any = null;
+    try {
+      console.log("[create] payload=", newActivity);
+      res = await cloud.invoke("create-activity", newActivity);
+      console.log("[create] res=", res);
+    } catch (e: any) {
+      console.error("[create] invoke error", e);
+      alert("发布失败（invoke 异常）：" + (e?.message || JSON.stringify(e)));
+      setIsLoading(false);
+      return;
+    }
+
+    if (res?.ok) {
+      setShowCreateModal(false);
+      resetCreateFlow();
+      fetchActivities();
+    } else {
+      alert("发布失败：" + (res?.msg || JSON.stringify(res)));
+    }
+
     setIsLoading(false);
   };
 
