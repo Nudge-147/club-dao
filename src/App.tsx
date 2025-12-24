@@ -64,6 +64,26 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
   const [inputTimeStr, setInputTimeStr] = useState("");
+  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [activityDraft, setActivityDraft] = useState({
+    title: "",
+    description: "",
+    category: "约饭",
+    location: "",
+    min_people: 2,
+    max_people: 5,
+    requires_verification: false,
+  });
+
+const [reqDraft, setReqDraft] = useState({
+  gender: "any" as "any" | "female_only" | "male_only",
+  identity: "any" as "any" | "undergrad" | "graduate",
+  stranger: "ok" as "ok" | "new_friends" | "has_circle",
+  vibe: [] as string[],
+  host_flags: [] as string[],
+});
+
+const [needPwdChange, setNeedPwdChange] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<string>("");
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -119,15 +139,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
-  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
-  const [reqDraft, setReqDraft] = useState({
-    gender: "any" as "any" | "female_only" | "male_only",
-    identity: "any" as "any" | "undergrad" | "graduate",
-    stranger: "ok" as "ok" | "new_friends" | "has_circle",
-    vibe: [] as string[],
-    host_flags: [] as string[],
-  });
-  const [needPwdChange, setNeedPwdChange] = useState(false);
+
 
   // --- 隐藏成就：社群会员盲盒 ---
   const [showSecret, setShowSecret] = useState(false);
@@ -1032,41 +1044,185 @@ function App() {
             </div>
 
             {createStep === 1 && (
-              <div className="flex flex-col gap-4">
-                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
-                
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
-                  <div className="flex gap-2 items-center">
-                    <div className="relative flex-[1.2]"><select value={dateState.year} onChange={(e) => handleDateChange('year', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(2025, 2030).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
-                    <div className="relative flex-1"><select value={dateState.month} onChange={(e) => handleDateChange('month', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, 12).map(m => <option key={m} value={m}>{m}月</option>)}</select></div>
-                    <div className="relative flex-1"><select value={dateState.day} onChange={(e) => handleDateChange('day', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => <option key={d} value={d}>{d}日</option>)}</select></div>
-                    <span className="text-gray-300 font-bold">-</span>
-                    <div className="relative flex-1"><select value={dateState.hour} onChange={(e) => handleDateChange('hour', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 23).map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}</select></div>
-                    <span className="text-gray-300 font-bold">:</span>
-                    <div className="relative flex-1"><select value={dateState.minute} onChange={(e) => handleDateChange('minute', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 59).map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}</select></div>
-                  </div>
-                </div>
+  <div className="flex flex-col gap-4">
 
-                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
-                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
-                
-                <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><ShieldCheck size={20}/></div>
-                    <div><div className="font-bold text-sm text-purple-900">仅限认证校友</div><div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div></div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" name="requires_verification" className="sr-only peer" />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                  </label>
-                </div>
+    {/* 分类 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label>
+      <div className="flex gap-4">
+        <label className="flex-1 cursor-pointer">
+          <input
+            type="radio"
+            checked={activityDraft.category === "约饭"}
+            onChange={() => setActivityDraft(p => ({ ...p, category: "约饭" }))}
+            className="peer hidden"
+          />
+          <div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all">
+            <Utensils size={16}/> 约饭
+          </div>
+        </label>
 
-                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label><textarea name="description" placeholder="年级要求、口味偏好、具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm" /></div>
-                <div className="text-xs font-black text-gray-500 mt-1">先把活动信息填清楚，下一步再设置“门槛与氛围”。</div>
-              </div>
-            )}
+        <label className="flex-1 cursor-pointer">
+          <input
+            type="radio"
+            checked={activityDraft.category === "拼单"}
+            onChange={() => setActivityDraft(p => ({ ...p, category: "拼单" }))}
+            className="peer hidden"
+          />
+          <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all">
+            <ShoppingBag size={16}/> 拼单
+          </div>
+        </label>
+      </div>
+    </div>
+
+    {/* 标题 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label>
+      <input
+        value={activityDraft.title}
+        onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
+        required
+        className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent"
+        placeholder="例如：周末火锅局"
+      />
+    </div>
+
+    {/* 时间（你这个本来就是 state，保持不动） */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <select
+          value={dateState.year}
+          onChange={e => handleDateChange("year", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(2025, 2030).map(y => (
+            <option key={y} value={y}>{y} 年</option>
+          ))}
+        </select>
+        <select
+          value={dateState.month}
+          onChange={e => handleDateChange("month", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(1, 12).map(m => (
+            <option key={m} value={m}>{m} 月</option>
+          ))}
+        </select>
+        <select
+          value={dateState.day}
+          onChange={e => handleDateChange("day", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => (
+            <option key={d} value={d}>{d} 日</option>
+          ))}
+        </select>
+        <select
+          value={dateState.hour}
+          onChange={e => handleDateChange("hour", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(0, 23).map(h => (
+            <option key={h} value={h}>{h} 时</option>
+          ))}
+        </select>
+        <select
+          value={dateState.minute}
+          onChange={e => handleDateChange("minute", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(0, 59).map(mi => (
+            <option key={mi} value={mi}>{mi} 分</option>
+          ))}
+        </select>
+      </div>
+    </div>
+
+    {/* 地点 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label>
+      <input
+        value={activityDraft.location}
+        onChange={e => setActivityDraft(p => ({ ...p, location: e.target.value }))}
+        required
+        className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+      />
+    </div>
+
+    {/* 人数 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label>
+      <div className="flex gap-4 items-center">
+        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-bold">最少</span>
+          <input
+            type="number"
+            min={2}
+            value={activityDraft.min_people}
+            onChange={e =>
+              setActivityDraft(p => ({ ...p, min_people: Number(e.target.value || 2) }))
+            }
+            className="w-full bg-transparent font-bold outline-none text-center"
+          />
+        </div>
+
+        <span className="text-gray-300 font-bold">-</span>
+
+        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-bold">最多</span>
+          <input
+            type="number"
+            min={2}
+            value={activityDraft.max_people}
+            onChange={e =>
+              setActivityDraft(p => ({ ...p, max_people: Number(e.target.value || 5) }))
+            }
+            className="w-full bg-transparent font-bold outline-none text-center"
+          />
+        </div>
+      </div>
+    </div>
+
+    {/* 仅限认证 */}
+    <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700">
+          <ShieldCheck size={20}/>
+        </div>
+        <div>
+          <div className="font-bold text-sm text-purple-900">仅限认证校友</div>
+          <div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div>
+        </div>
+      </div>
+
+      <input
+        type="checkbox"
+        checked={activityDraft.requires_verification}
+        onChange={e =>
+          setActivityDraft(p => ({ ...p, requires_verification: e.target.checked }))
+        }
+      />
+    </div>
+
+    {/* 详情 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label>
+      <textarea
+        value={activityDraft.description}
+        onChange={e => setActivityDraft(p => ({ ...p, description: e.target.value }))}
+        placeholder="年级要求、口味偏好、具体流程..."
+        className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm"
+      />
+    </div>
+
+    <div className="text-xs font-black text-gray-500 mt-1">
+      先把活动信息填清楚，下一步再设置“门槛与氛围”。
+    </div>
+  </div>
+)}
+
 
             {createStep === 2 && (
               <div className="flex flex-col gap-4">
