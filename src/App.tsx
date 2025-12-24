@@ -43,6 +43,13 @@ interface Activity {
   hidden_by?: string[]; 
   status?: 'active' | 'locked' | 'cancelled' | 'done';
   requires_verification?: boolean;
+  requirements?: {
+    gender: "any" | "female_only" | "male_only";
+    identity: "any" | "undergrad" | "graduate";
+    stranger: "ok" | "new_friends" | "has_circle";
+    vibe: string[];
+    host_flags: string[];
+  };
 }
 
 // --- 皮肤配置 ---
@@ -496,6 +503,39 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
 
     const actionButtons: React.ReactNode[] = [];
 
+    const req = activity.requirements;
+    const tags: string[] = [];
+
+    if (req) {
+      if (req.gender === "female_only") tags.push("仅女生");
+      else if (req.gender === "male_only") tags.push("仅男生");
+
+      if (req.identity === "undergrad") tags.push("本科");
+      else if (req.identity === "graduate") tags.push("研究生");
+
+      if (req.stranger === "new_friends") tags.push("想认识新朋友");
+      else if (req.stranger === "has_circle") tags.push("有熟人也欢迎");
+
+      const vibeMap: Record<string, string> = {
+        quiet: "偏安静",
+        lively: "偏热闹",
+        casual: "轻松随意",
+        serious: "比较认真",
+        i_friendly: "I人友好",
+        e_friendly: "E人友好",
+      };
+      (req.vibe || []).slice(0, 2).forEach(k => tags.push(vibeMap[k] || k));
+
+      const hostMap: Record<string, string> = {
+        welcome_first_timer: "欢迎新手",
+        welcome_solo: "欢迎一个人来",
+        chat_before_decide: "可先聊再决定",
+        will_reply: "会在局内回复",
+        no_gender_mind: "不介意性别/专业",
+      };
+      (req.host_flags || []).slice(0, 1).forEach(k => tags.push(hostMap[k] || k));
+    }
+
     if (isAuthor) {
       if (isDone) {
         actionButtons.push(
@@ -581,6 +621,18 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
           <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
         </div>
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {tags.slice(0, 6).map((t) => (
+              <span
+                key={t}
+                className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mb-4"><p onClick={() => setExpanded(!expanded)} className="text-gray-500 text-sm leading-relaxed whitespace-pre-wrap">{expanded ? activity.description : (activity.description||"").slice(0, 50) + "..."}</p></div>
         <div className="flex flex-col gap-3">
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
