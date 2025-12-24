@@ -419,56 +419,57 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!currentUser) return;
+    e.preventDefault();
+    if (!currentUser) return;
     if (!requireStrongPwd()) return;
-    const form = e.target as HTMLFormElement;
-    const formData = new FormData(form);
-    const minVal = parseInt(formData.get('min_people') as string) || 2;
-    const maxVal = parseInt(formData.get('max_people') as string) || 5;
-    if (minVal < 2) { alert("❌ 至少 2 人"); return; }
-    if (maxVal < minVal) { alert(`❌ 人数设置错误`); return; }
-    const timeString = inputTimeStr.trim();
-    if (!timeString) { alert("⏰ 请填写时间"); return; }
 
-    setIsLoading(true);
+    const title = (activityDraft.title || "").trim();
+    const location = (activityDraft.location || "").trim();
+    const description = (activityDraft.description || "").trim();
+    const category = activityDraft.category || "约饭";
+    const minVal = Number(activityDraft.min_people || 2);
+    const maxVal = Number(activityDraft.max_people || 5);
+    const timeString = inputTimeStr.trim();
+
+    // ✅ 前端兜底校验（避免请求后端才提示）
+    if (!title) { alert("❌ 标题不能为空"); setCreateStep(1); return; }
+    if (!location) { alert("❌ 地点不能为空"); setCreateStep(1); return; }
+    if (!timeString) { alert("⏰ 请填写时间"); setCreateStep(1); return; }
+    if (minVal < 2) { alert("❌ 至少 2 人"); setCreateStep(1); return; }
+    if (maxVal < minVal) { alert("❌ 人数设置错误"); setCreateStep(1); return; }
+
     const newActivity = {
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      category: formData.get('category'),
+      title,
+      description,
+      category,
       max_people: maxVal,
       min_people: minVal,
-      time: timeString, 
-      location: formData.get('location') as string,
+      time: timeString,
+      location,
       author: currentUser,
-      requires_verification: formData.get('requires_verification') === 'on',
-      created_at: Date.now(),
-      joined_users: [currentUser],
-      hidden_by: [],
-      status: 'active',
-      requirements: reqDraft
+      requires_verification: !!activityDraft.requires_verification,
+      requirements: reqDraft,
     };
 
-    let res: any = null;
+    setIsLoading(true);
     try {
       console.log("[create] payload=", newActivity);
-      res = await cloud.invoke("create-activity", newActivity);
+      const res: any = await cloud.invoke("create-activity", newActivity);
       console.log("[create] res=", res);
+
+      if (res?.ok) {
+        setShowCreateModal(false);
+        resetCreateFlow();
+        fetchActivities();
+      } else {
+        alert("发布失败：" + (res?.msg || "未知错误"));
+      }
     } catch (e: any) {
-      console.error("[create] invoke error", e);
+      console.error(e);
       alert("发布失败（invoke 异常）：" + (e?.message || JSON.stringify(e)));
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    if (res?.ok) {
-      setShowCreateModal(false);
-      resetCreateFlow();
-      fetchActivities();
-    } else {
-      alert("发布失败：" + (res?.msg || JSON.stringify(res)));
-    }
-
-    setIsLoading(false);
   };
 
   const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
