@@ -119,6 +119,14 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
+  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [reqDraft, setReqDraft] = useState({
+    gender: "any" as "any" | "female_only" | "male_only",
+    identity: "any" as "any" | "undergrad" | "graduate",
+    stranger: "ok" as "ok" | "new_friends" | "has_circle",
+    vibe: [] as string[],
+    host_flags: [] as string[],
+  });
   const [needPwdChange, setNeedPwdChange] = useState(false);
 
   // --- 隐藏成就：社群会员盲盒 ---
@@ -220,6 +228,27 @@ function App() {
     alert("🔒 你的密码过短（<5位），为安全起见请先升级密码后再继续使用此功能。");
     setActiveTab("profile");
     return false;
+  };
+
+  const toggleInList = (key: "vibe" | "host_flags", v: string, limit: number) => {
+    setReqDraft(prev => {
+      const arr = prev[key];
+      const has = arr.includes(v);
+      if (has) return { ...prev, [key]: arr.filter(x => x !== v) };
+      if (arr.length >= limit) return prev;
+      return { ...prev, [key]: [...arr, v] };
+    });
+  };
+
+  const resetCreateFlow = () => {
+    setCreateStep(1);
+    setReqDraft({
+      gender: "any",
+      identity: "any",
+      stranger: "ok",
+      vibe: [],
+      host_flags: [],
+    });
   };
 
   const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
@@ -403,10 +432,11 @@ function App() {
       created_at: Date.now(),
       joined_users: [currentUser],
       hidden_by: [],
-      status: 'active'
+      status: 'active',
+      requirements: reqDraft
     };
     const res = await cloud.invoke("create-activity", newActivity);
-    if (res && res.id) { setShowCreateModal(false); fetchActivities(); } else { alert("发布失败"); }
+    if (res && res.id) { setShowCreateModal(false); resetCreateFlow(); fetchActivities(); } else { alert("发布失败"); }
     setIsLoading(false);
   };
 
@@ -972,39 +1002,207 @@ function App() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
           <div className="flex justify-between items-center mb-6 pt-4"><h2 className="text-3xl font-black">发布活动</h2><button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button></div>
-          <form onSubmit={handleCreateActivity} className="flex-1 space-y-6 overflow-y-auto pb-20">
-            <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div>
-            <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
-            
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
-              <div className="flex gap-2 items-center">
-                <div className="relative flex-[1.2]"><select value={dateState.year} onChange={(e) => handleDateChange('year', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(2025, 2030).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
-                <div className="relative flex-1"><select value={dateState.month} onChange={(e) => handleDateChange('month', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, 12).map(m => <option key={m} value={m}>{m}月</option>)}</select></div>
-                <div className="relative flex-1"><select value={dateState.day} onChange={(e) => handleDateChange('day', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => <option key={d} value={d}>{d}日</option>)}</select></div>
-                <span className="text-gray-300 font-bold">-</span>
-                <div className="relative flex-1"><select value={dateState.hour} onChange={(e) => handleDateChange('hour', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 23).map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}</select></div>
-                <span className="text-gray-300 font-bold">:</span>
-                <div className="relative flex-1"><select value={dateState.minute} onChange={(e) => handleDateChange('minute', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 59).map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}</select></div>
+          <form onSubmit={handleCreateActivity} className="flex-1 space-y-4 overflow-y-auto pb-20">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex gap-2">
+                {[1, 2, 3].map((s) => (
+                  <div key={s} className={`h-2 w-10 rounded-full ${createStep >= s ? "bg-black" : "bg-gray-200"}`} />
+                ))}
               </div>
+              <div className="text-xs font-black text-gray-500">第 {createStep}/3 步</div>
             </div>
 
-            <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
-            <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
-            
-            <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><ShieldCheck size={20}/></div>
-                <div><div className="font-bold text-sm text-purple-900">仅限认证校友</div><div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div></div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" name="requires_verification" className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-              </label>
-            </div>
+            {createStep === 1 && (
+              <div className="flex flex-col gap-4">
+                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label><div className="flex gap-4"><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="约饭" defaultChecked className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><Utensils size={16}/> 约饭</div></label><label className="flex-1 cursor-pointer"><input type="radio" name="category" value="拼单" className="peer hidden" /><div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all"><ShoppingBag size={16}/> 拼单</div></label></div></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label><input name="title" required className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent" placeholder="例如：周末火锅局" /></div>
+                
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-[1.2]"><select value={dateState.year} onChange={(e) => handleDateChange('year', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(2025, 2030).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+                    <div className="relative flex-1"><select value={dateState.month} onChange={(e) => handleDateChange('month', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, 12).map(m => <option key={m} value={m}>{m}月</option>)}</select></div>
+                    <div className="relative flex-1"><select value={dateState.day} onChange={(e) => handleDateChange('day', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => <option key={d} value={d}>{d}日</option>)}</select></div>
+                    <span className="text-gray-300 font-bold">-</span>
+                    <div className="relative flex-1"><select value={dateState.hour} onChange={(e) => handleDateChange('hour', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 23).map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}</select></div>
+                    <span className="text-gray-300 font-bold">:</span>
+                    <div className="relative flex-1"><select value={dateState.minute} onChange={(e) => handleDateChange('minute', e.target.value)} className="w-full bg-gray-50 text-center font-bold text-lg py-3 rounded-xl outline-none">{range(0, 59).map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}</select></div>
+                  </div>
+                </div>
 
-            <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label><textarea name="description" placeholder="年级要求、口味偏好、具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm" /></div>
-            <button disabled={isLoading} type="submit" className={`w-full text-white py-5 rounded-2xl font-bold text-xl shadow-xl mt-8 ${theme.primary}`}>{isLoading ? "发布中..." : "即刻发布"}</button>
+                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label><input name="location" required className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label><div className="flex gap-4 items-center"><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最少</span><input type="number" name="min_people" placeholder="2" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div><span className="text-gray-300 font-bold">-</span><div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2"><span className="text-xs text-gray-400 font-bold">最多</span><input type="number" name="max_people" placeholder="5" min="2" className="w-full bg-transparent font-bold outline-none text-center" /></div></div></div>
+                
+                <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><ShieldCheck size={20}/></div>
+                    <div><div className="font-bold text-sm text-purple-900">仅限认证校友</div><div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div></div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="requires_verification" className="sr-only peer" />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
+                </div>
+
+                <div className="space-y-2"><label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label><textarea name="description" placeholder="年级要求、口味偏好、具体流程..." className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm" /></div>
+                <div className="text-xs font-black text-gray-500 mt-1">先把活动信息填清楚，下一步再设置“门槛与氛围”。</div>
+              </div>
+            )}
+
+            {createStep === 2 && (
+              <div className="flex flex-col gap-4">
+                <div className="text-sm font-black">加入门槛</div>
+
+                <div>
+                  <div className="text-xs font-black text-gray-500 mb-2">性别要求</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { k: "any", t: "不限" },
+                      { k: "female_only", t: "仅女生" },
+                      { k: "male_only", t: "仅男生" },
+                    ].map(it => (
+                      <button type="button" key={it.k}
+                        onClick={() => setReqDraft(p => ({ ...p, gender: it.k as any }))}
+                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.gender === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                      >
+                        {it.t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-black text-gray-500 mb-2">身份偏好</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { k: "any", t: "不限" },
+                      { k: "undergrad", t: "本科" },
+                      { k: "graduate", t: "研究生" },
+                    ].map(it => (
+                      <button type="button" key={it.k}
+                        onClick={() => setReqDraft(p => ({ ...p, identity: it.k as any }))}
+                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.identity === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                      >
+                        {it.t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-black text-gray-500 mb-2">对陌生人接受度</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { k: "ok", t: "完全 OK" },
+                      { k: "new_friends", t: "想认识新朋友" },
+                      { k: "has_circle", t: "我有熟人圈但欢迎加入" },
+                    ].map(it => (
+                      <button type="button" key={it.k}
+                        onClick={() => setReqDraft(p => ({ ...p, stranger: it.k as any }))}
+                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.stranger === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                      >
+                        {it.t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-black text-gray-500 mb-2">活动氛围（最多选 3 个）</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { k: "quiet", t: "偏安静" },
+                      { k: "lively", t: "偏热闹" },
+                      { k: "casual", t: "轻松随意" },
+                      { k: "serious", t: "比较认真" },
+                      { k: "i_friendly", t: "I 人友好" },
+                      { k: "e_friendly", t: "E 人友好" },
+                    ].map(it => {
+                      const on = reqDraft.vibe.includes(it.k);
+                      return (
+                        <button type="button" key={it.k}
+                          onClick={() => toggleInList("vibe", it.k, 3)}
+                          className={`px-4 py-2 rounded-xl text-sm font-black border ${on ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                        >
+                          {it.t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="text-xs text-gray-500 font-bold leading-relaxed">
+                  这些信息会在加入前展示，帮助同学判断是否合适，减少尴尬。
+                </div>
+              </div>
+            )}
+
+            {createStep === 3 && (
+              <div className="flex flex-col gap-4">
+                <div className="text-sm font-black">发起人态度（帮助大家安心加入）</div>
+
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { k: "welcome_first_timer", t: "欢迎第一次参加搭子" },
+                    { k: "welcome_solo", t: "欢迎一个人来" },
+                    { k: "chat_before_decide", t: "可以先聊再决定" },
+                    { k: "will_reply", t: "我会在活动内回复" },
+                    { k: "no_gender_mind", t: "不介意不同性别/专业" },
+                  ].map(it => {
+                    const on = reqDraft.host_flags.includes(it.k);
+                    return (
+                      <button type="button" key={it.k}
+                        onClick={() => toggleInList("host_flags", it.k, 6)}
+                        className={`px-4 py-2 rounded-xl text-sm font-black border ${on ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                      >
+                        {it.t}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-gray-50 rounded-2xl p-4">
+                  <div className="text-xs font-black text-gray-500 mb-2">预览（加入前会看到）</div>
+                  <div className="text-sm font-black">门槛与态度摘要</div>
+                  <div className="text-xs text-gray-600 font-bold mt-2">
+                    性别：{reqDraft.gender === "any" ? "不限" : reqDraft.gender === "female_only" ? "仅女生" : "仅男生"}；
+                    陌生人：{reqDraft.stranger === "ok" ? "完全OK" : reqDraft.stranger === "new_friends" ? "想认识新朋友" : "有熟人圈但欢迎加入"}；
+                    氛围：{reqDraft.vibe.length ? reqDraft.vibe.join("、") : "未指定"}。
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (createStep === 1) { setShowCreateModal(false); resetCreateFlow(); }
+                  else setCreateStep(s => (s - 1) as any);
+                }}
+                className="flex-1 py-3 rounded-xl font-black text-sm bg-gray-100 text-gray-700 active:scale-95"
+              >
+                {createStep === 1 ? "取消" : "上一步"}
+              </button>
+
+              {createStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setCreateStep(s => (s + 1) as any)}
+                  className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95"
+                >
+                  下一步
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95 disabled:opacity-60"
+                >
+                  {isLoading ? "发布中..." : "发布活动"}
+                </button>
+              )}
+            </div>
           </form>
         </div>
       )}
