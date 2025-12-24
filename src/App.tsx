@@ -72,6 +72,8 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
   const [inputTimeStr, setInputTimeStr] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [showJoinConfirm, setShowJoinConfirm] = useState(false);
+  const [pendingJoin, setPendingJoin] = useState<Activity | null>(null);
   const [activityDraft, setActivityDraft] = useState({
     title: "",
     description: "",
@@ -315,29 +317,6 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     alert(`🎉 你抽到了：${picked}`);
   };
 
-  const formatReqText = (a: Activity) => {
-    const r = a.requirements;
-    if (!r) return "未设置门槛";
-
-    const parts: string[] = [];
-
-    // 性别
-    if (r.gender === "female_only") parts.push("仅女生");
-    else if (r.gender === "male_only") parts.push("仅男生");
-    else parts.push("性别不限");
-
-    // 身份
-    if (r.identity === "undergrad") parts.push("本科");
-    else if (r.identity === "graduate") parts.push("研究生");
-    else parts.push("身份不限");
-
-    // 陌生人接受度
-    if (r.stranger === "new_friends") parts.push("想认识新朋友");
-    else if (r.stranger === "has_circle") parts.push("有熟人也欢迎");
-    else parts.push("陌生人OK");
-
-    return parts.join(" / ");
-  };
 
   const handleJoin = async (activityId: string) => {
     if (!currentUser) { alert("请先登录"); return; }
@@ -346,22 +325,24 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     const act = activities.find(x => x._id === activityId);
     if (!act) { alert("活动不存在或已刷新"); return; }
 
-    const joined = act.joined_users || [];
-    const reqText = formatReqText(act);
+    setPendingJoin(act);
+    setShowJoinConfirm(true);
+  };
 
-    const ok = window.confirm(
-      `加入前确认：\n` +
-      `- 门槛：${reqText}\n` +
-      `- 当前已加入：${joined.length}/${act.max_people}\n\n` +
-      `你确认符合门槛并愿意加入吗？`
-    );
-    if (!ok) return;
+  const confirmJoin = async () => {
+    if (!pendingJoin) return;
 
     setIsLoading(true);
     try {
-      const res = await cloud.invoke("join-activity", { activityId, username: currentUser });
-      if (res?.ok) { alert("加入成功！"); fetchActivities(); }
-      else { alert(res?.msg || "加入失败"); }
+      const res = await cloud.invoke("join-activity", { activityId: pendingJoin._id, username: currentUser });
+      if (res?.ok) {
+        setShowJoinConfirm(false);
+        setPendingJoin(null);
+        fetchActivities();
+        alert("加入成功！");
+      } else {
+        alert(res?.msg || "加入失败");
+      }
     } catch (e) {
       alert("网络错误");
     } finally {
@@ -1125,6 +1106,97 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
       {/* 主题弹窗 */}
       {showThemeModal && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up"><h3 className="text-xl font-black mb-6 text-center">选择界面风格</h3><div className="grid grid-cols-3 gap-4"><button onClick={() => handleSetTheme("warm")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='warm'?'border-orange-500 bg-orange-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-orange-500 shadow-md"></div><span className="text-xs font-bold">暖阳橙</span></button><button onClick={() => handleSetTheme("cool")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='cool'?'border-blue-500 bg-blue-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-blue-500 shadow-md"></div><span className="text-xs font-bold">清凉蓝</span></button><button onClick={() => handleSetTheme("nju")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='nju'?'border-purple-800 bg-purple-50':'border-transparent bg-gray-50'} relative overflow-hidden`}><div className="w-8 h-8 rounded-full bg-[#6A005F] shadow-md flex items-center justify-center">{userActivityCount < 10 && <Lock size={14} className="text-white/50"/>}</div><span className="text-xs font-bold text-[#6A005F]">南大紫</span></button></div><button onClick={() => setShowThemeModal(false)} className="w-full mt-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">关闭</button></div></div>)}
       
+      {showJoinConfirm && pendingJoin && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 animate-slide-up">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <div className="text-xs font-black text-gray-400">加入前确认</div>
+                <div className="text-xl font-black mt-1">{pendingJoin.title}</div>
+                <div className="text-xs font-bold text-gray-500 mt-1">
+                  当前已加入 {(pendingJoin.joined_users || []).length}/{pendingJoin.max_people}
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowJoinConfirm(false); setPendingJoin(null); }}
+                className="w-9 h-9 rounded-full bg-gray-100 text-gray-500 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 门槛标签 */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(() => {
+                const r = pendingJoin.requirements;
+                const tags: string[] = [];
+
+                if (pendingJoin.requires_verification) tags.push("仅限认证");
+
+                if (r) {
+                  if (r.gender === "female_only") tags.push("仅女生");
+                  else if (r.gender === "male_only") tags.push("仅男生");
+                  else tags.push("性别不限");
+
+                  if (r.identity === "undergrad") tags.push("本科");
+                  else if (r.identity === "graduate") tags.push("研究生");
+                  else tags.push("身份不限");
+
+                  if (r.stranger === "new_friends") tags.push("想认识新朋友");
+                  else if (r.stranger === "has_circle") tags.push("有熟人也欢迎");
+                  else tags.push("陌生人OK");
+
+                  const vibeMap: Record<string, string> = {
+                    quiet: "偏安静",
+                    lively: "偏热闹",
+                    casual: "轻松随意",
+                    serious: "比较认真",
+                    i_friendly: "I人友好",
+                    e_friendly: "E人友好",
+                  };
+                  (r.vibe || []).slice(0, 3).forEach(k => tags.push(vibeMap[k] || k));
+
+                  const hostMap: Record<string, string> = {
+                    welcome_first_timer: "欢迎新手",
+                    welcome_solo: "欢迎一个人来",
+                    chat_before_decide: "可先聊再决定",
+                    will_reply: "会在局内回复",
+                    no_gender_mind: "不介意性别/专业",
+                  };
+                  (r.host_flags || []).slice(0, 2).forEach(k => tags.push(hostMap[k] || k));
+                }
+
+                return tags.slice(0, 10).map(t => (
+                  <span key={t} className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                    {t}
+                  </span>
+                ));
+              })()}
+            </div>
+
+            <div className="text-xs font-bold text-gray-500 leading-relaxed mb-5">
+              确认你符合门槛并愿意加入。加入后你能看到其他同伴，避免尴尬。
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowJoinConfirm(false); setPendingJoin(null); }}
+                className="flex-1 py-3 rounded-xl font-black text-sm bg-gray-100 text-gray-700 active:scale-95"
+              >
+                返回
+              </button>
+              <button
+                onClick={confirmJoin}
+                disabled={isLoading}
+                className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95 disabled:opacity-60"
+              >
+                {isLoading ? "加入中..." : "确认加入"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 发布活动弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
