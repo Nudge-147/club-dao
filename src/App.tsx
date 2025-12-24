@@ -74,11 +74,8 @@ function App() {
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<Activity | null>(null);
+  const [roomOpen, setRoomOpen] = useState(false);
   const [roomActivity, setRoomActivity] = useState<Activity | null>(null);
-  // 点开某个成员的名片
-  const [showMemberCard, setShowMemberCard] = useState(false);
-  const [memberLoading, setMemberLoading] = useState(false);
-  const [memberInfo, setMemberInfo] = useState<UserData | null>(null);
   const [activityDraft, setActivityDraft] = useState({
     title: "",
     description: "",
@@ -356,29 +353,14 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
   };
 
   const openRoom = (a: Activity) => {
-    try {
-      console.log("[openRoom] set", a?._id, a?.title);
-      setRoomActivity(a);
-    } catch (e) {
-      console.error("[openRoom] error", e);
-    }
+    console.log("[openRoom] set", a._id, a.title);
+    setRoomActivity(a);
+    setRoomOpen(true);
   };
 
-  const closeRoom = () => setRoomActivity(null);
-
-  const openMemberCard = async (username: string) => {
-    setShowMemberCard(true);
-    setMemberLoading(true);
-    setMemberInfo(null);
-    try {
-      // 依赖你现有的 user-ops: get-info（你当前 fetchUserData 就是这么拿的）
-      const res = await cloud.invoke("user-ops", { type: "get-info", username });
-      if (res) setMemberInfo(res);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setMemberLoading(false);
-    }
+  const closeRoom = () => {
+    setRoomOpen(false);
+    setRoomActivity(null);
   };
 
   const handleQuit = async (activityId: string) => {
@@ -561,11 +543,8 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
       <button
         key="room"
         type="button"
-        onClick={() => {
-          console.log("[room-btn] clicked", activity?._id, activity?.title);
-          openRoom(activity);
-        }}
-        className="px-4 py-2 rounded-xl text-sm font-black bg-black text-white shadow active:scale-95"
+        onClick={() => openRoom(activity)}
+        className="px-6 py-2 rounded-xl text-sm font-bold bg-black text-white shadow active:scale-95"
       >
         进入房间
       </button>
@@ -1595,120 +1574,138 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
         </div>
       )}
 
-      {roomActivity && (
-        <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-[2rem] bg-white shadow-2xl overflow-hidden">
-            {/* 顶部显示牌 */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5">
-              <div className="text-xs opacity-90 font-bold">
-                房主：{roomActivity.author}
-              </div>
-              <div className="text-2xl font-black mt-1">
-                {roomActivity.title}
-              </div>
-              <div className="text-sm opacity-90 font-bold mt-1">
-                {roomActivity.description || "一起加入吧！"}
-              </div>
+      {roomOpen && roomActivity && (
+        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} />
+      )}
+
+    </div>
+  );
+}
+
+function RoomModal({
+  activity,
+  currentUser,
+  onClose,
+}: {
+  activity: Activity;
+  currentUser: string;
+  onClose: () => void;
+}) {
+  const joined = activity.joined_users || [];
+  const host = activity.author || "房主";
+  const title = activity.title || "未命名活动";
+
+  const avatarText = (name: string) => (name?.trim()?.slice(0, 1) || "?");
+
+  return (
+    <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm">
+      <div className="absolute inset-x-0 top-0 bottom-0 bg-[#EAF2FF] flex flex-col">
+        <div className="flex items-center justify-between px-4 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-white/80 border border-white/60 flex items-center justify-center font-black text-gray-500 active:scale-95"
+          >
+            ✕
+          </button>
+
+          <div className="text-xs font-black text-gray-500 bg-white/70 px-3 py-2 rounded-full border border-white/60">
+            {joined.length}/{activity.max_people}
+          </div>
+        </div>
+
+        <div className="px-4 mt-3">
+          <div className="bg-gradient-to-r from-[#2D5BFF] to-[#4CA6FF] text-white rounded-3xl px-5 py-4 shadow-lg border border-white/20 relative overflow-hidden">
+            <div className="text-[11px] font-black opacity-90">
+              房主：{host} ｜ {activity.category || "活动房间"}
+            </div>
+            <div className="text-2xl font-black mt-1 leading-tight">
+              {title}
+            </div>
+            <div className="text-[12px] font-bold opacity-90 mt-1">
+              {activity.description ? activity.description.slice(0, 20) : "一起出发吧！"}
+              {activity.description && activity.description.length > 20 ? "…" : ""}
             </div>
 
-            {/* 内容区占位：成员 + 聊天 */}
-            <div className="p-5 space-y-4">
-              <div className="text-xs font-black text-gray-500">已加入成员</div>
-              <div className="flex flex-wrap gap-2">
-                {(roomActivity.joined_users || []).map(u => (
-                  <button
-                    key={u}
-                    type="button"
-                    className="px-3 py-2 rounded-xl bg-gray-100 font-bold text-sm"
-                    onClick={() => openMemberCard(u)}
-                  >
-                    {u}
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-xs font-black text-gray-500">房间聊天（占位）</div>
-              <div className="h-48 rounded-2xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-400 font-bold">
-                这里之后接入 messages，实现群聊
-              </div>
-
-              <button
-                type="button"
-                onClick={closeRoom}
-                className="w-full py-3 rounded-xl bg-black text-white font-black"
-              >
-                关闭
-              </button>
+            <div className="absolute right-4 top-4 bg-white/20 rounded-2xl px-3 py-2 text-sm font-black">
+              ROOM
             </div>
+          </div>
+        </div>
 
-            {/* 成员名片弹窗（在房间里再叠一层） */}
-            {showMemberCard && (
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-end justify-center p-4">
-                <div className="w-full rounded-[2rem] bg-white p-5 shadow-2xl">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="font-black text-lg">成员档案</div>
-                    <button
-                      onClick={() => { setShowMemberCard(false); setMemberInfo(null); }}
-                      className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 font-black"
-                    >
-                      ✕
-                    </button>
-                  </div>
+        <div className="flex-1 px-4 mt-4 overflow-y-auto pb-24">
+          <div className="text-sm font-black text-gray-700 mb-3">
+            已加入的同学（点头像下一步做“个人档案”）
+          </div>
 
-                  {memberLoading && (
-                    <div className="py-10 text-center text-sm font-bold text-gray-400">加载中...</div>
-                  )}
-
-                  {!memberLoading && memberInfo && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center font-black text-xl">
-                          {memberInfo.username.slice(0, 1).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-black text-base flex items-center gap-2">
-                            {memberInfo.username}
-                            {memberInfo.is_verified && (
-                              <span className="text-[10px] px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700 font-black">
-                                已认证
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] font-bold text-gray-400">
-                            {memberInfo.profile?.grade || "未填写年级"} · {memberInfo.profile?.city || "未填写城市"}
-                          </div>
-                        </div>
+          <div className="grid grid-cols-2 gap-3">
+            {joined.map((name) => {
+              const isMe = name === currentUser;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    alert(`TODO：打开 ${name} 的个人档案`);
+                  }}
+                  className="bg-white/80 rounded-3xl p-4 border border-white/60 shadow-sm active:scale-[0.99] text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${
+                          isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {avatarText(name)}
                       </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-                          <div className="text-[10px] font-black text-gray-400">性别</div>
-                          <div className="text-sm font-black text-gray-800">{memberInfo.profile?.gender || "未填写"}</div>
+                      <div>
+                        <div className="font-black text-sm text-gray-900">
+                          {name}
+                          {isMe ? <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-black text-white">你</span> : null}
                         </div>
-                        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-                          <div className="text-[10px] font-black text-gray-400">兴趣</div>
-                          <div className="text-sm font-black text-gray-800">{memberInfo.profile?.hobbies || "未填写"}</div>
-                        </div>
-                      </div>
-
-                      <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-                        <div className="text-[10px] font-black text-gray-400">自我介绍</div>
-                        <div className="text-sm font-bold text-gray-800 whitespace-pre-wrap">
-                          {memberInfo.profile?.intro || "这个人还没写介绍～"}
+                        <div className="text-[11px] font-bold text-gray-500">
+                          点击查看档案
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  {!memberLoading && !memberInfo && (
-                    <div className="py-10 text-center text-sm font-bold text-gray-400">暂无信息</div>
-                  )}
-                </div>
-              </div>
-            )}
+                    <div className="text-[10px] font-black px-2 py-1 rounded-full bg-green-50 text-green-600 border border-green-100">
+                      已加入
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 bg-white/70 rounded-3xl border border-white/60 p-4">
+            <div className="text-xs font-black text-gray-600 mb-2">
+              聊天区域（下一步做）
+            </div>
+            <div className="text-sm font-bold text-gray-400">
+              这里将会出现群聊输入框与消息列表。
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="fixed left-0 right-0 bottom-0 bg-white/85 backdrop-blur border-t border-white/60 px-4 py-3 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-700 font-black active:scale-95"
+          >
+            返回
+          </button>
+          <button
+            type="button"
+            onClick={() => alert("TODO：准备/聊天/邀请")}
+            className="flex-1 py-3 rounded-2xl bg-black text-white font-black active:scale-95"
+          >
+            准备
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
