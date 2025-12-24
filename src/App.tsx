@@ -560,7 +560,11 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     actionButtons.push(
       <button
         key="room"
-        onClick={() => openRoom(activity)}
+        type="button"
+        onClick={() => {
+          console.log("[room-btn] clicked", activity?._id, activity?.title);
+          openRoom(activity);
+        }}
         className="px-4 py-2 rounded-xl text-sm font-black bg-black text-white shadow active:scale-95"
       >
         进入房间
