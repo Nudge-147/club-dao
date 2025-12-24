@@ -17,6 +17,7 @@ interface UserProfile {
   city?: string;
   hobbies?: string;
   intro?: string;
+  mbti?: string;
 }
 
 interface UserData {
@@ -1090,6 +1091,29 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
                        <select value={tempProfile.grade||""} onChange={e=>setTempProfile({...tempProfile, grade: e.target.value})} className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none"><option value="">请选择</option><option>本科大一</option><option>本科大二</option><option>本科大三</option><option>本科大四</option><option>硕士研究生</option><option>博士研究生</option></select>
                      ) : <div className="p-3 bg-gray-50 rounded-xl text-sm font-bold">{userData?.profile?.grade||"未填写"}</div>}
                    </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase">MBTI</label>
+
+                  {isEditingProfile ? (
+                    <select
+                      value={tempProfile.mbti || ""}
+                      onChange={(e) => setTempProfile({ ...tempProfile, mbti: e.target.value })}
+                      className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none"
+                    >
+                      <option value="">不填写</option>
+                      {[
+                        "INTJ","INTP","ENTJ","ENTP",
+                        "INFJ","INFP","ENFJ","ENFP",
+                        "ISTJ","ISFJ","ESTJ","ESFJ",
+                        "ISTP","ISFP","ESTP","ESFP"
+                      ].map(x => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded-xl text-sm font-bold">
+                      {userData?.profile?.mbti || "未填写"}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                    <label className="text-[10px] font-bold text-gray-400 uppercase">来自城市</label>
