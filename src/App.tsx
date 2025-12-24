@@ -74,6 +74,12 @@ function App() {
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<Activity | null>(null);
+  // 房间页
+  const [activeRoom, setActiveRoom] = useState<Activity | null>(null);
+  // 点开某个成员的名片
+  const [showMemberCard, setShowMemberCard] = useState(false);
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [memberInfo, setMemberInfo] = useState<UserData | null>(null);
   const [activityDraft, setActivityDraft] = useState({
     title: "",
     description: "",
@@ -350,6 +356,31 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     }
   };
 
+  const openRoom = (a: Activity) => {
+    setActiveRoom(a);
+  };
+
+  const closeRoom = () => {
+    setActiveRoom(null);
+    setShowMemberCard(false);
+    setMemberInfo(null);
+  };
+
+  const openMemberCard = async (username: string) => {
+    setShowMemberCard(true);
+    setMemberLoading(true);
+    setMemberInfo(null);
+    try {
+      // 依赖你现有的 user-ops: get-info（你当前 fetchUserData 就是这么拿的）
+      const res = await cloud.invoke("user-ops", { type: "get-info", username });
+      if (res) setMemberInfo(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
   const handleQuit = async (activityId: string) => {
     if (!window.confirm("确定要退出？")) return;
     setIsLoading(true);
@@ -526,6 +557,15 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     const canFinish = joined.length >= minP;
 
     const actionButtons: React.ReactNode[] = [];
+    actionButtons.push(
+      <button
+        key="room"
+        onClick={() => openRoom(activity)}
+        className="px-4 py-2 rounded-xl text-sm font-black bg-black text-white shadow active:scale-95"
+      >
+        进入房间
+      </button>
+    );
 
     const req = activity.requirements;
     const tags: string[] = [];
@@ -735,7 +775,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
               {isSecretExpired ? "已截止" : `剩余 ${daysLeft} 天`}
             </div>
             <div className="text-[10px] font-bold text-gray-300">
-              12/28 截止（之后更新）
+              12/28 截止
             </div>
           </div>
         </button>
@@ -753,7 +793,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
 
             <div className="text-[11px] font-bold text-gray-500 leading-relaxed mb-3">
               进群后你就是【区块链 + AI 大模型金科大赛社团】会员。<br />
-              会员可抽取随机【特殊徽章】（盲盒），越稀有越有排面。
+              会员可抽取随机【特殊徽章】（盲盒）。
             </div>
 
             <div className="flex items-center justify-center rounded-2xl bg-white p-4 border border-gray-100">
@@ -802,7 +842,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
                 <div className="text-[11px] font-bold text-yellow-700">你获得的特殊徽章</div>
                 <div className="text-lg font-black text-yellow-800 mt-1">{secretBadge}</div>
                 <div className="text-[10px] font-bold text-yellow-600 mt-1">
-                  这是“身份感”奖励：越稀有越有优越感 ✨
+                  这是你的专属奖励！欢迎你的加入 ✨
                 </div>
               </div>
             ) : (
@@ -1175,7 +1215,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
             </div>
 
             <div className="text-xs font-bold text-gray-500 leading-relaxed mb-5">
-              确认你符合门槛并愿意加入。加入后你能看到其他同伴，避免尴尬。
+              确认你符合门槛并愿意加入。加入后你就能看到其他同伴啦～
             </div>
 
             <div className="flex gap-2">
@@ -1389,7 +1429,155 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
       先把活动信息填清楚，下一步再设置“门槛与氛围”。
     </div>
   </div>
-)}
+      )}
+
+      {activeRoom && (
+        <div className="fixed inset-0 z-[60] bg-[#0b1220]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md h-[88vh] bg-white rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+
+            {/* 关闭 */}
+            <button
+              onClick={closeRoom}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/80 border border-gray-100 flex items-center justify-center font-black text-gray-500 z-10"
+            >
+              ✕
+            </button>
+
+            {/* 顶部“显示牌” */}
+            <div className="relative px-6 pt-8 pb-6 bg-gradient-to-b from-[#e9f2ff] to-white">
+              {/* 两条“吊绳”装饰 */}
+              <div className="absolute left-12 top-0 w-[2px] h-10 bg-gray-300/70" />
+              <div className="absolute right-12 top-0 w-[2px] h-10 bg-gray-300/70" />
+
+              <div className="mx-auto w-full rounded-[1.8rem] bg-[#1f3b7a] text-white px-5 py-4 shadow-lg border border-white/20">
+                <div className="text-[11px] font-black opacity-90">
+                  房主：{activeRoom.author}｜{activeRoom.title}
+                </div>
+                <div className="text-xl font-black mt-1 leading-snug">
+                  {activeRoom.description?.trim()
+                    ? (activeRoom.description.trim().slice(0, 18) + (activeRoom.description.trim().length > 18 ? "…" : ""))
+                    : "一起出发！"}
+                </div>
+              </div>
+
+              {/* 活动基础信息 */}
+              <div className="mt-4 text-xs font-bold text-gray-500 flex flex-col gap-2">
+                <div className="flex items-center gap-2"><Calendar size={14} /> {activeRoom.time}</div>
+                <div className="flex items-center gap-2"><MapPin size={14} /> {activeRoom.location}</div>
+              </div>
+            </div>
+
+            {/* 成员座位区 */}
+            <div className="px-6 pb-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-black">已加入成员</div>
+                <div className="text-xs font-black text-gray-400">
+                  {(activeRoom.joined_users || []).length}/{activeRoom.max_people}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {(activeRoom.joined_users || []).map((u, idx) => {
+                  const isMe = u === currentUser;
+                  return (
+                    <button
+                      key={u + idx}
+                      onClick={() => openMemberCard(u)}
+                      className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-left active:scale-[0.99] transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black ${
+                          isMe ? "bg-black text-white" : "bg-white border border-gray-200 text-gray-800"
+                        }`}>
+                          {u.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-black text-sm">{u}{isMe ? "（你）" : ""}</div>
+                          <div className="text-[10px] font-bold text-gray-400">点开查看档案</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 聊天区占位（下一步做真正聊天） */}
+              <div className="mt-5 rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="text-xs font-black text-gray-500 mb-2">房间聊天</div>
+                <div className="h-28 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-xs font-bold text-gray-400">
+                  聊天区（下一步上线）
+                </div>
+              </div>
+            </div>
+
+            {/* 成员名片弹窗（在房间里再叠一层） */}
+            {showMemberCard && (
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-end justify-center p-4">
+                <div className="w-full rounded-[2rem] bg-white p-5 shadow-2xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-black text-lg">成员档案</div>
+                    <button
+                      onClick={() => { setShowMemberCard(false); setMemberInfo(null); }}
+                      className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 font-black"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {memberLoading && (
+                    <div className="py-10 text-center text-sm font-bold text-gray-400">加载中...</div>
+                  )}
+
+                  {!memberLoading && memberInfo && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center font-black text-xl">
+                          {memberInfo.username.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-black text-base flex items-center gap-2">
+                            {memberInfo.username}
+                            {memberInfo.is_verified && (
+                              <span className="text-[10px] px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700 font-black">
+                                已认证
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] font-bold text-gray-400">
+                            {memberInfo.profile?.grade || "未填写年级"} · {memberInfo.profile?.city || "未填写城市"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                          <div className="text-[10px] font-black text-gray-400">性别</div>
+                          <div className="text-sm font-black text-gray-800">{memberInfo.profile?.gender || "未填写"}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                          <div className="text-[10px] font-black text-gray-400">兴趣</div>
+                          <div className="text-sm font-black text-gray-800">{memberInfo.profile?.hobbies || "未填写"}</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                        <div className="text-[10px] font-black text-gray-400">自我介绍</div>
+                        <div className="text-sm font-bold text-gray-800 whitespace-pre-wrap">
+                          {memberInfo.profile?.intro || "这个人还没写介绍～"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!memberLoading && !memberInfo && (
+                    <div className="py-10 text-center text-sm font-bold text-gray-400">暂无信息</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
 
             {createStep === 2 && (
@@ -1421,6 +1609,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
                       { k: "any", t: "不限" },
                       { k: "undergrad", t: "本科" },
                       { k: "graduate", t: "研究生" },
+                      { k: "PhD", t: "博士" },
                     ].map(it => (
                       <button type="button" key={it.k}
                         onClick={() => setReqDraft(p => ({ ...p, identity: it.k as any }))}
