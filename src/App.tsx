@@ -119,6 +119,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
+  const [needPwdChange, setNeedPwdChange] = useState(false);
 
   // --- 隐藏成就：社群会员盲盒 ---
   const [showSecret, setShowSecret] = useState(false);
@@ -141,6 +142,9 @@ function App() {
     const savedTheme = localStorage.getItem("club_theme") as ThemeKey;
     if (savedTheme && THEMES[savedTheme]) setCurrentTheme(savedTheme);
     fetchActivities();
+
+    const savedNeed = localStorage.getItem("club_need_pwd_change") === "1";
+    setNeedPwdChange(savedNeed);
   }, []);
 
   const fetchActivities = async () => {
@@ -211,6 +215,13 @@ function App() {
     setCurrentTheme(theme); localStorage.setItem("club_theme", theme); setShowThemeModal(false);
   };
 
+  const requireStrongPwd = () => {
+    if (!needPwdChange) return true;
+    alert("🔒 你的密码过短（<5位），为安全起见请先升级密码后再继续使用此功能。");
+    setActiveTab("profile");
+    return false;
+  };
+
   const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
   const deadlineTs = new Date(SECRET_DEADLINE_STR).getTime();
   const nowTs = Date.now();
@@ -258,6 +269,7 @@ function App() {
 
   const handleJoin = async (activityId: string) => {
     if (!currentUser) { alert("请先登录"); return; }
+    if (!requireStrongPwd()) return;
     if (!window.confirm("确定加入？")) return;
     setIsLoading(true);
     try {
@@ -358,6 +370,7 @@ function App() {
   };
 
   const saveProfile = async () => {
+    if (!requireStrongPwd()) return;
     try {
       const res = await cloud.invoke("user-ops", { type: 'update-profile', username: currentUser, profile: tempProfile });
       if (res.ok) { alert("档案已保存"); setUserData(prev => prev ? {...prev, profile: tempProfile} : null); setIsEditingProfile(false); }
@@ -366,6 +379,7 @@ function App() {
 
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault(); if (!currentUser) return;
+    if (!requireStrongPwd()) return;
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
     const minVal = parseInt(formData.get('min_people') as string) || 2;
@@ -397,9 +411,9 @@ function App() {
   };
 
   const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
-  const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
-  const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
-  const handleLogout = () => { localStorage.removeItem("club_username"); setCurrentUser(""); setUserData(null); setVerifyEmail(""); setVerifyCode(""); setTempProfile({}); setIsEditingProfile(false); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
+  const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){const need=!!res.need_pwd_change;setNeedPwdChange(need);localStorage.setItem("club_need_pwd_change",need?"1":"0");localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
+  const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); if(loginPassword.length<5){setLoginError("密码至少 5 位");setIsLoading(false);return;} setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){const need=!!res.need_pwd_change;setNeedPwdChange(need);localStorage.setItem("club_need_pwd_change",need?"1":"0");localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
+  const handleLogout = () => { localStorage.removeItem("club_username"); localStorage.removeItem("club_need_pwd_change"); setNeedPwdChange(false); setCurrentUser(""); setUserData(null); setVerifyEmail(""); setVerifyCode(""); setTempProfile({}); setIsEditingProfile(false); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
   const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
@@ -839,6 +853,41 @@ function App() {
             </div>
 
             {/* 成就系统卡片 */}
+            {needPwdChange && (
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-red-100">
+                <div className="font-black text-sm text-red-600 mb-2">🔒 安全升级：请修改密码</div>
+                <div className="text-xs text-gray-500 font-bold leading-relaxed">
+                  你的旧密码长度小于 5 位。为保证账号安全，需升级为至少 5 位的新密码后，才能创建/加入活动等关键操作。
+                </div>
+                <button
+                  onClick={() => {
+                    const oldPassword = window.prompt("请输入旧密码：") || "";
+                    const newPassword = window.prompt("请输入新密码（至少5位）：") || "";
+                    if (!oldPassword || !newPassword) return;
+
+                    (async () => {
+                      const res = await cloud.invoke("user-ops", {
+                        type: "change-password",
+                        username: currentUser,
+                        oldPassword,
+                        newPassword,
+                      });
+                      if (res?.ok) {
+                        alert("✅ 密码已升级");
+                        setNeedPwdChange(false);
+                        localStorage.setItem("club_need_pwd_change", "0");
+                      } else {
+                        alert(res?.msg || "修改失败");
+                      }
+                    })();
+                  }}
+                  className="mt-4 w-full py-3 bg-black text-white rounded-xl font-black text-sm active:scale-95"
+                >
+                  立即升级密码
+                </button>
+              </div>
+            )}
+
             <AchievementCard />
             <SecretAchievementCard />
 
