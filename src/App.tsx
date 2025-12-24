@@ -315,15 +315,58 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     alert(`🎉 你抽到了：${picked}`);
   };
 
+  const formatReqText = (a: Activity) => {
+    const r = a.requirements;
+    if (!r) return "未设置门槛";
+
+    const parts: string[] = [];
+
+    // 性别
+    if (r.gender === "female_only") parts.push("仅女生");
+    else if (r.gender === "male_only") parts.push("仅男生");
+    else parts.push("性别不限");
+
+    // 身份
+    if (r.identity === "undergrad") parts.push("本科");
+    else if (r.identity === "graduate") parts.push("研究生");
+    else parts.push("身份不限");
+
+    // 陌生人接受度
+    if (r.stranger === "new_friends") parts.push("想认识新朋友");
+    else if (r.stranger === "has_circle") parts.push("有熟人也欢迎");
+    else parts.push("陌生人OK");
+
+    return parts.join(" / ");
+  };
+
   const handleJoin = async (activityId: string) => {
     if (!currentUser) { alert("请先登录"); return; }
     if (!requireStrongPwd()) return;
-    if (!window.confirm("确定加入？")) return;
+
+    const act = activities.find(x => x._id === activityId);
+    if (!act) { alert("活动不存在或已刷新"); return; }
+
+    const joined = act.joined_users || [];
+    const reqText = formatReqText(act);
+
+    const ok = window.confirm(
+      `加入前确认：\n` +
+      `- 门槛：${reqText}\n` +
+      `- 当前已加入：${joined.length}/${act.max_people}\n\n` +
+      `你确认符合门槛并愿意加入吗？`
+    );
+    if (!ok) return;
+
     setIsLoading(true);
     try {
       const res = await cloud.invoke("join-activity", { activityId, username: currentUser });
-      if (res.ok) { alert("加入成功！"); fetchActivities(); } else { alert(res.msg); }
-    } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
+      if (res?.ok) { alert("加入成功！"); fetchActivities(); }
+      else { alert(res?.msg || "加入失败"); }
+    } catch (e) {
+      alert("网络错误");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleQuit = async (activityId: string) => {
