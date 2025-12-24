@@ -1591,11 +1591,30 @@ function RoomModal({
   currentUser: string;
   onClose: () => void;
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileUser, setProfileUser] = useState<UserData | null>(null);
+
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
 
   const avatarText = (name: string) => (name?.trim()?.slice(0, 1) || "?");
+
+  const openUserProfile = async (username: string) => {
+    setProfileOpen(true);
+    setProfileLoading(true);
+    setProfileUser(null);
+
+    try {
+      const res = await cloud.invoke("user-ops", { type: "get-info", username });
+      if (res) setProfileUser(res);
+    } catch (e) {
+      alert("获取档案失败（网络错误）");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm">
@@ -1645,9 +1664,7 @@ function RoomModal({
                 <button
                   key={name}
                   type="button"
-                  onClick={() => {
-                    alert(`TODO：打开 ${name} 的个人档案`);
-                  }}
+                  onClick={() => openUserProfile(name)}
                   className="bg-white/80 rounded-3xl p-4 border border-white/60 shadow-sm active:scale-[0.99] text-left"
                 >
                   <div className="flex items-center justify-between">
@@ -1706,6 +1723,96 @@ function RoomModal({
           </button>
         </div>
       </div>
+
+      {profileOpen && (
+        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end justify-center">
+          <div className="w-full max-w-md bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border border-white/60">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-black">个人档案</div>
+              <button
+                type="button"
+                onClick={() => setProfileOpen(false)}
+                className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 font-black active:scale-95"
+              >
+                ✕
+              </button>
+            </div>
+
+            {profileLoading && (
+              <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
+                正在加载…
+              </div>
+            )}
+
+            {!profileLoading && profileUser && (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-3xl p-5 border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xl font-black">{profileUser.username}</div>
+                    {profileUser.is_verified ? (
+                      <div className="px-2 py-1 rounded-lg bg-yellow-400 text-yellow-950 text-[10px] font-black">
+                        已认证
+                      </div>
+                    ) : (
+                      <div className="px-2 py-1 rounded-lg bg-gray-200 text-gray-600 text-[10px] font-black">
+                        未认证
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-2 text-sm font-bold text-gray-500 whitespace-pre-wrap">
+                    {profileUser.profile?.intro || "这个人还没写自我介绍…"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                    <div className="text-[10px] font-black text-gray-400">性别</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.gender || "未填写"}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                    <div className="text-[10px] font-black text-gray-400">年级</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.grade || "未填写"}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                    <div className="text-[10px] font-black text-gray-400">来自城市</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.city || "未填写"}
+                    </div>
+                  </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                    <div className="text-[10px] font-black text-gray-400">兴趣爱好</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.hobbies || "未填写"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(false)}
+                  className="w-full py-3 rounded-2xl bg-black text-white font-black active:scale-95"
+                >
+                  返回房间
+                </button>
+              </div>
+            )}
+
+            {!profileLoading && !profileUser && (
+              <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
+                没拿到该用户档案（可能还没创建/网络问题）
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
