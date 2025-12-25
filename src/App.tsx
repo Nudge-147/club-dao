@@ -49,6 +49,7 @@ interface Activity {
   location: string;
   author: string;
   category: string;
+  soul_question?: string;
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
@@ -101,6 +102,7 @@ function App() {
     min_people: 2,
     max_people: 5,
     requires_verification: false,
+    soul_question: "",
   });
 
 const [reqDraft, setReqDraft] = useState({
@@ -316,6 +318,7 @@ const [tags, setTags] = useState<string[]>([]);
     });
     setTags([]);
     setTagInput("");
+    setActivityDraft(p => ({ ...p, soul_question: "" }));
   };
 
   const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
@@ -518,6 +521,8 @@ const [tags, setTags] = useState<string[]>([]);
     const minVal = Number(activityDraft.min_people || 2);
     const maxVal = Number(activityDraft.max_people || 5);
     const timeString = inputTimeStr.trim();
+    const soulQuestion = (activityDraft.soul_question || "").trim();
+    if (soulQuestion.length > 40) { alert("灵魂一问最多 40 字"); return; }
 
     // ✅ 前端兜底校验（避免请求后端才提示）
     if (!title) { alert("❌ 标题不能为空"); setCreateStep(1); return; }
@@ -537,6 +542,7 @@ const [tags, setTags] = useState<string[]>([]);
       author: currentUser,
       requires_verification: !!activityDraft.requires_verification,
       requirements: reqDraft,
+      soul_question: soulQuestion,
       tags,
       topic: tags.includes("圣诞") ? "christmas" : "",
     };
@@ -866,7 +872,7 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             <div className={`mt-3 text-[11px] font-black ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
-              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : "⏳ 稀缺入口：12/28 前有效（过期后会更新）"}
+              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : "⏳ 加入我们，在群里可以找到开发者给出你的创新建议～"}
             </div>
           </div>
 
@@ -1264,6 +1270,18 @@ const [tags, setTags] = useState<string[]>([]);
               </button>
             </div>
 
+            {pendingJoin.soul_question && pendingJoin.soul_question.trim().length > 0 && (
+              <div className="mb-4 p-3 rounded-2xl bg-blue-50 border border-blue-100 flex gap-2 items-start">
+                <Megaphone size={16} className="text-blue-500 mt-0.5" />
+                <div>
+                  <div className="text-[11px] font-black text-blue-600">灵魂一问</div>
+                  <div className="text-sm font-bold text-gray-700 whitespace-pre-wrap">
+                    {pendingJoin.soul_question}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 门槛标签 */}
             <div className="flex flex-wrap gap-2 mb-4">
               {(() => {
@@ -1570,6 +1588,24 @@ const [tags, setTags] = useState<string[]>([]);
             {createStep === 2 && (
               <div className="flex flex-col gap-4">
                 <div className="text-sm font-black">加入门槛</div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-black text-gray-500">灵魂一问（可选）</div>
+                    <div className="text-[10px] font-black text-gray-400">
+                      {(activityDraft.soul_question || "").trim().length}/40
+                    </div>
+                  </div>
+                  <textarea
+                    value={activityDraft.soul_question || ""}
+                    onChange={e => {
+                      const v = e.target.value.slice(0, 40);
+                      setActivityDraft(p => ({ ...p, soul_question: v }));
+                    }}
+                    placeholder="例如：你希望今天认识什么样的人？"
+                    className="w-full bg-gray-50 rounded-2xl p-3 text-sm font-bold outline-none h-16 resize-none"
+                  />
+                </div>
 
                 <div>
                   <div className="text-xs font-black text-gray-500 mb-2">性别要求</div>
@@ -2042,7 +2078,7 @@ function RoomModal({
 
           {/* 底部提示：社会认同 */}
           <div className="mt-4 text-[11px] font-bold text-gray-400">
-            ✅ 你能看到“还有谁也在”，这就是房间感：减少尴尬，提高加入意愿。
+            ✅ 这里可以看到“还有谁也在”，赶紧开始和TA们聊天商讨活动细节吧～
           </div>
 
         </div>
