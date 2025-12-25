@@ -1625,6 +1625,20 @@ function RoomModal({
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
 
+  const SEAT_COUNT = 8;
+
+  const seatedUsers = (() => {
+    const joined = activity.joined_users || [];
+    const list: string[] = [];
+    const pushUniq = (u: string) => { if (u && !list.includes(u)) list.push(u); };
+
+    pushUniq(activity.author);
+    joined.forEach(pushUniq);
+
+    return list.slice(0, SEAT_COUNT);
+  })();
+
+  const seats: (string | null)[] = Array.from({ length: SEAT_COUNT }, (_, i) => seatedUsers[i] || null);
 
   useEffect(() => {
     const joined = activity.joined_users || [];
@@ -1720,67 +1734,116 @@ function RoomModal({
         <div className="flex-1 px-4 mt-4 overflow-y-auto pb-24">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-black text-gray-700">
-              已加入的同学
+              房间座位（{seatedUsers.length}/{SEAT_COUNT}）
             </div>
+
             {memberLoading && (
               <div className="text-[11px] font-black text-gray-400">加载成员档案…</div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {joined.map((name) => {
-              const isMe = name === currentUser;
-              const info = memberInfoMap[name] || null;
-              const mbti = info?.profile?.mbti || "未填写";
-              const grade = info?.profile?.grade || "未填写";
+          {/* 顶部“显示牌” */}
+          <div className="bg-white/90 border border-white/60 rounded-[2rem] p-4 shadow-sm mb-4">
+            <div className="text-[10px] font-black text-gray-400">房主：{activity.author}</div>
+            <div className="text-xl font-black text-gray-900 mt-1">
+              {activity.title}
+            </div>
+            <div className="text-[12px] font-bold text-gray-500 mt-1">
+              {activity.description ? activity.description.slice(0, 28) + (activity.description.length > 28 ? "..." : "") : "一起加入，别尴尬，你不是一个人。"}
+            </div>
+          </div>
 
-              const avatarText = (name?.trim()?.slice(0, 1) || "?");
+          {/* 座位区 */}
+          <div className="grid grid-cols-2 gap-3">
+            {seats.map((u, idx) => {
+              const empty = !u;
+              const info = u ? (memberInfoMap[u] || null) : null;
+
+              const mbti = info?.profile?.mbti || "未填";
+              const grade = info?.profile?.grade || "未填";
+              const avatarText = u ? (u.trim().slice(0, 1) || "+") : "+";
+
+              const isHost = u && u === activity.author;
+              const isMe = u && u === currentUser;
 
               return (
                 <button
-                  key={name}
+                  key={idx}
                   type="button"
-                  onClick={() => openUserProfile(name)}
-                  className="bg-white/85 rounded-3xl p-4 border border-white/70 shadow-sm active:scale-[0.99] text-left"
+                  disabled={empty}
+                  onClick={() => { if (u) openUserProfile(u); }}
+                  className={[
+                    "relative rounded-[2rem] p-4 text-left transition active:scale-[0.99]",
+                    empty
+                      ? "bg-white/40 border border-dashed border-gray-200 text-gray-300"
+                      : "bg-white/85 border border-white/60 shadow-sm",
+                  ].join(" ")}
                 >
-                  <div className="flex items-center gap-3">
+                  {/* 角标：座位号 */}
+                  <div className="absolute top-3 right-3 text-[10px] font-black text-gray-300">
+                    #{idx + 1}
+                  </div>
+
+                  {/* 角标：房主/你 */}
+                  {!empty && (
+                    <div className="absolute top-3 left-3 flex gap-2">
+                      {isHost && (
+                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-400 text-yellow-950">
+                          房主
+                        </span>
+                      )}
+                      {isMe && (
+                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-black text-white">
+                          你
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 头像块 */}
+                  <div className="mt-6 flex items-center gap-3">
                     <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${
-                        isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"
-                      }`}
+                      className={[
+                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg",
+                        empty
+                          ? "bg-gray-100 text-gray-300"
+                          : isMe
+                          ? "bg-black text-white"
+                          : "bg-blue-100 text-blue-700",
+                      ].join(" ")}
                     >
                       {avatarText}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="font-black text-sm text-gray-900 truncate">
-                          {name}
-                        </div>
-                        {isMe && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black text-white font-black">
-                            你
-                          </span>
-                        )}
+                      <div className={`font-black text-sm ${empty ? "text-gray-300" : "text-gray-900"} truncate`}>
+                        {empty ? "空位" : u}
                       </div>
-
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                          MBTI · {mbti}
-                        </span>
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                          年级 · {grade}
-                        </span>
+                      <div className={`text-[11px] font-bold mt-1 ${empty ? "text-gray-300" : "text-gray-400"}`}>
+                        {empty ? "等待加入" : "点击查看档案"}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 text-[11px] font-bold text-gray-400">
-                    点击查看档案
-                  </div>
+                  {/* 标签：MBTI / 年级 */}
+                  {!empty && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                        MBTI · {mbti}
+                      </span>
+                      <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                        年级 · {grade}
+                      </span>
+                    </div>
+                  )}
                 </button>
               );
             })}
+          </div>
+
+          {/* 底部提示：社会认同 */}
+          <div className="mt-4 text-[11px] font-bold text-gray-400">
+            ✅ 你能看到“还有谁也在”，这就是房间感：减少尴尬，提高加入意愿。
           </div>
 
           <div className="mt-5 bg-white/70 rounded-3xl border border-white/60 p-4">
