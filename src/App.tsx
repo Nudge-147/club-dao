@@ -66,6 +66,17 @@ interface Activity {
   topic?: string;
 }
 
+interface ActivityDraft {
+  title: string;
+  description: string;
+  category: CategoryType;
+  location: string;
+  min_people: string;
+  max_people: string;
+  requires_verification: boolean;
+  soul_question?: string;
+}
+
 // --- 皮肤配置 ---
 const THEMES = {
   warm: { name: "暖阳橙", bg: "bg-[#FFF8F0]", card: "bg-white", primary: "bg-orange-500", primaryText: "text-orange-500", accent: "bg-yellow-400", icon: "text-orange-600", border: "border-orange-100", badge: "bg-orange-50 text-orange-600", navActive: "text-orange-600", navInactive: "text-gray-300" },
@@ -94,13 +105,13 @@ function App() {
   const [pendingJoin, setPendingJoin] = useState<Activity | null>(null);
   const [roomOpen, setRoomOpen] = useState(false);
   const [roomActivity, setRoomActivity] = useState<Activity | null>(null);
-  const [activityDraft, setActivityDraft] = useState({
+  const [activityDraft, setActivityDraft] = useState<ActivityDraft>({
     title: "",
     description: "",
     category: CATEGORY_OPTIONS[0],
     location: "",
-    min_people: 2,
-    max_people: 5,
+    min_people: "",
+    max_people: "",
     requires_verification: false,
     soul_question: "",
   });
@@ -136,13 +147,6 @@ const [tags, setTags] = useState<string[]>([]);
     const f = (n: number) => n.toString().padStart(2, '0'); 
     setInputTimeStr(`${year}/${f(month)}/${f(day)} ${f(hour)}:${f(minute)}`);
   }, [dateState]);
-
-  useEffect(() => {
-    if (showCreateModal) {
-      const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-      setDateState({ year: tmr.getFullYear(), month: tmr.getMonth() + 1, day: tmr.getDate(), hour: 0, minute: 0 });
-    }
-  }, [showCreateModal]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -297,18 +301,31 @@ const [tags, setTags] = useState<string[]>([]);
     setTags(tags.filter(x => x !== t));
   }
 
-  const toggleInList = (key: "vibe" | "host_flags", v: string, limit: number) => {
-    setReqDraft(prev => {
-      const arr = prev[key];
-      const has = arr.includes(v);
-      if (has) return { ...prev, [key]: arr.filter(x => x !== v) };
-      if (arr.length >= limit) return prev;
-      return { ...prev, [key]: [...arr, v] };
-    });
+  const normalizePeople = () => {
+    let minVal = parseInt(activityDraft.min_people || "", 10);
+    if (Number.isNaN(minVal)) minVal = 2;
+    if (minVal < 2) minVal = 2;
+
+    let maxVal = parseInt(activityDraft.max_people || "", 10);
+    if (Number.isNaN(maxVal)) maxVal = 5;
+    if (maxVal < minVal) maxVal = minVal;
+
+    return { minVal, maxVal };
   };
 
-  const resetCreateFlow = () => {
+  const resetCreateDraft = () => {
+    const now = new Date();
     setCreateStep(1);
+    setActivityDraft({
+      title: "",
+      description: "",
+      category: CATEGORY_OPTIONS[0],
+      location: "",
+      min_people: "",
+      max_people: "",
+      requires_verification: false,
+      soul_question: "",
+    });
     setReqDraft({
       gender: "any",
       identity: "any",
@@ -318,7 +335,23 @@ const [tags, setTags] = useState<string[]>([]);
     });
     setTags([]);
     setTagInput("");
-    setActivityDraft(p => ({ ...p, soul_question: "" }));
+    setDateState({
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      day: now.getDate(),
+      hour: now.getHours(),
+      minute: now.getMinutes(),
+    });
+  };
+
+  const toggleInList = (key: "vibe" | "host_flags", v: string, limit: number) => {
+    setReqDraft(prev => {
+      const arr = prev[key];
+      const has = arr.includes(v);
+      if (has) return { ...prev, [key]: arr.filter(x => x !== v) };
+      if (arr.length >= limit) return prev;
+      return { ...prev, [key]: [...arr, v] };
+    });
   };
 
   const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
@@ -518,8 +551,7 @@ const [tags, setTags] = useState<string[]>([]);
     const location = (activityDraft.location || "").trim();
     const description = (activityDraft.description || "").trim();
     const category = activityDraft.category || "约饭";
-    const minVal = Number(activityDraft.min_people || 2);
-    const maxVal = Number(activityDraft.max_people || 5);
+    const { minVal, maxVal } = normalizePeople();
     const timeString = inputTimeStr.trim();
     const soulQuestion = (activityDraft.soul_question || "").trim();
     if (soulQuestion.length > 40) { alert("灵魂一问最多 40 字"); return; }
@@ -555,7 +587,7 @@ const [tags, setTags] = useState<string[]>([]);
 
       if (res?.ok) {
         setShowCreateModal(false);
-        resetCreateFlow();
+        resetCreateDraft();
         fetchActivities();
       } else {
         alert("发布失败：" + (res?.msg || "未知错误"));
@@ -674,11 +706,6 @@ const [tags, setTags] = useState<string[]>([]);
             确定完成
           </button>
         );
-        actionButtons.push(
-          <button key="dissolve" onClick={() => handleDissolve(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
-            解散
-          </button>
-        );
       } else if (isActive) {
         if (canFinish) {
           actionButtons.push(
@@ -693,11 +720,6 @@ const [tags, setTags] = useState<string[]>([]);
             </button>
           );
         }
-        actionButtons.push(
-          <button key="dissolve" onClick={() => handleDissolve(activity._id)} className="px-6 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-500">
-            解散
-          </button>
-        );
       }
     } else {
       if (isCancelled) {
@@ -738,7 +760,18 @@ const [tags, setTags] = useState<string[]>([]);
              <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${activity.category === '约饭' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{activity.category || "约饭"}</span>
              {activity.requires_verification && <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-purple-100 text-purple-600 flex items-center gap-1"><ShieldCheck size={10}/> 仅限认证</span>}
           </div>
-          <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
+          <div className="flex items-center gap-2">
+            {isAuthor && (
+              <button
+                type="button"
+                onClick={() => handleDissolve(activity._id)}
+                className="px-3 py-1 rounded-lg text-[11px] font-black bg-red-50 text-red-600"
+              >
+                解散
+              </button>
+            )}
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
+          </div>
         </div>
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
         {reqTags.length > 0 && (
@@ -1241,7 +1274,7 @@ const [tags, setTags] = useState<string[]>([]);
       </main>
 
       {/* 悬浮按钮与底部导航 */}
-      {activeTab === 'square' && (<button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
+      {activeTab === 'square' && (<button onClick={() => { resetCreateDraft(); setShowCreateModal(true); }} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button>
         <button onClick={() => setActiveTab('my_activities')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'my_activities' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'my_activities' ? 3 : 2} /><span className="text-[10px] font-bold">我的局</span></button>
@@ -1357,7 +1390,7 @@ const [tags, setTags] = useState<string[]>([]);
       {/* 发布活动弹窗 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6 pt-4"><h2 className="text-3xl font-black">发布活动</h2><button onClick={() => setShowCreateModal(false)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button></div>
+          <div className="flex justify-between items-center mb-6 pt-4"><h2 className="text-3xl font-black">发布活动</h2><button onClick={() => { resetCreateDraft(); setShowCreateModal(false); }} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button></div>
           <form onSubmit={handleCreateActivity} className="flex-1 space-y-4 overflow-y-auto pb-20">
             <div className="flex items-center justify-between mb-2">
               <div className="flex gap-2">
@@ -1476,10 +1509,10 @@ const [tags, setTags] = useState<string[]>([]);
           <span className="text-xs text-gray-400 font-bold">最少</span>
           <input
             type="number"
-            min={2}
+            placeholder="2"
             value={activityDraft.min_people}
             onChange={e =>
-              setActivityDraft(p => ({ ...p, min_people: Number(e.target.value || 2) }))
+              setActivityDraft(p => ({ ...p, min_people: e.target.value }))
             }
             className="w-full bg-transparent font-bold outline-none text-center"
           />
@@ -1491,10 +1524,10 @@ const [tags, setTags] = useState<string[]>([]);
           <span className="text-xs text-gray-400 font-bold">最多</span>
           <input
             type="number"
-            min={2}
+            placeholder="5"
             value={activityDraft.max_people}
             onChange={e =>
-              setActivityDraft(p => ({ ...p, max_people: Number(e.target.value || 5) }))
+              setActivityDraft(p => ({ ...p, max_people: e.target.value }))
             }
             className="w-full bg-transparent font-bold outline-none text-center"
           />
@@ -1602,7 +1635,7 @@ const [tags, setTags] = useState<string[]>([]);
                       const v = e.target.value.slice(0, 40);
                       setActivityDraft(p => ({ ...p, soul_question: v }));
                     }}
-                    placeholder="例如：你希望今天认识什么样的人？"
+                    placeholder="例如：你确定你是羽毛球零基础？不许来新手局虐菜！"
                     className="w-full bg-gray-50 rounded-2xl p-3 text-sm font-bold outline-none h-16 resize-none"
                   />
                 </div>
@@ -1732,7 +1765,7 @@ const [tags, setTags] = useState<string[]>([]);
               <button
                 type="button"
                 onClick={() => {
-                  if (createStep === 1) { setShowCreateModal(false); resetCreateFlow(); }
+                  if (createStep === 1) { resetCreateDraft(); setShowCreateModal(false); }
                   else setCreateStep(s => (s - 1) as any);
                 }}
                 className="flex-1 py-3 rounded-xl font-black text-sm bg-gray-100 text-gray-700 active:scale-95"
@@ -1743,7 +1776,7 @@ const [tags, setTags] = useState<string[]>([]);
               {createStep < 3 ? (
                 <button
                   type="button"
-                  onClick={() => setCreateStep(s => (s + 1) as any)}
+                  onClick={() => { normalizePeople(); setCreateStep(s => (s + 1) as any); }}
                   className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95"
                 >
                   下一步
@@ -1984,7 +2017,7 @@ function RoomModal({
               {activity.title}
             </div>
             <div className="text-[12px] font-bold text-gray-500 mt-1">
-              {activity.description ? activity.description.slice(0, 28) + (activity.description.length > 28 ? "..." : "") : "一起加入，别尴尬，你不是一个人。"}
+              {activity.description ? activity.description.slice(0, 28) + (activity.description.length > 28 ? "..." : "") : "没有人是一座孤岛～"}
             </div>
           </div>
 
