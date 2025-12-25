@@ -1,7 +1,7 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Utensils, ShoppingBag, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -37,6 +37,8 @@ interface ChatMsg {
   created_at: number;
 }
 
+type CategoryType = "干饭搭子" | "咖啡学习" | "运动健身" | "桌游狼人" | "看展逛街" | "电影观影" | "旅行出游" | "夜跑骑行";
+
 interface Activity {
   _id: string;
   title: string;
@@ -46,7 +48,7 @@ interface Activity {
   time: string;
   location: string;
   author: string;
-  category: "约饭" | "拼单";
+  category: string;
   created_at?: number;
   joined_users: string[];
   hidden_by?: string[]; 
@@ -59,6 +61,8 @@ interface Activity {
     vibe: string[];
     host_flags: string[];
   };
+  tags?: string[];
+  topic?: string;
 }
 
 // --- 皮肤配置 ---
@@ -69,6 +73,7 @@ const THEMES = {
 };
 
 type ThemeKey = keyof typeof THEMES;
+const CATEGORY_OPTIONS: CategoryType[] = ["干饭搭子", "咖啡学习", "运动健身", "桌游狼人", "看展逛街", "电影观影", "旅行出游", "夜跑骑行"];
 
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -78,7 +83,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState<"全部" | "约饭" | "拼单">("全部");
+  const [activeCategory, setActiveCategory] = useState<"全部" | CategoryType>("全部");
+  const [tagFilter, setTagFilter] = useState<string>("");
   const [inputTimeStr, setInputTimeStr] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
@@ -88,7 +94,7 @@ function App() {
   const [activityDraft, setActivityDraft] = useState({
     title: "",
     description: "",
-    category: "约饭",
+    category: CATEGORY_OPTIONS[0],
     location: "",
     min_people: 2,
     max_people: 5,
@@ -104,6 +110,8 @@ const [reqDraft, setReqDraft] = useState({
 });
 
 const [needPwdChange, setNeedPwdChange] = useState(false);
+const [tagInput, setTagInput] = useState("");
+const [tags, setTags] = useState<string[]>([]);
 
   const [currentUser, setCurrentUser] = useState<string>("");
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -238,14 +246,15 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     return activities.filter(a => {
       const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || a.category === activeCategory;
+      const matchTag = !tagFilter || (a.tags || []).includes(tagFilter);
 
       const isActive = (a.status || 'active') === 'active';
       const isHidden = (a.hidden_by || []).includes(currentUser);
       const expired = isExpired(a);
 
-      return matchSearch && matchCategory && isActive && !expired && !isHidden;
+      return matchSearch && matchCategory && matchTag && isActive && !expired && !isHidden;
     });
-  }, [activities, searchTerm, activeCategory, currentUser]);
+  }, [activities, searchTerm, activeCategory, currentUser, tagFilter]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) { 
@@ -261,6 +270,28 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     setActiveTab("profile");
     return false;
   };
+
+  const MAX_TAGS = 6;
+  const MAX_TAG_LEN = 10;
+  const MAX_TAG_TOTAL = 50;
+
+  function addTag(raw: string) {
+    let t = (raw ?? "").trim().replace(/^#/, "");
+    if (!t) return;
+    if (t.length > MAX_TAG_LEN) { alert("单个标签最多10字"); return; }
+    if (tags.includes(t)) return;
+    if (tags.length >= MAX_TAGS) { alert("最多6个标签"); return; }
+
+    const total = tags.reduce((s, x) => s + x.length, 0);
+    if (total + t.length > MAX_TAG_TOTAL) { alert("标签总长度最多50字"); return; }
+
+    setTags([...tags, t]);
+    setTagInput("");
+  }
+
+  function removeTag(t: string) {
+    setTags(tags.filter(x => x !== t));
+  }
 
   const toggleInList = (key: "vibe" | "host_flags", v: string, limit: number) => {
     setReqDraft(prev => {
@@ -281,6 +312,8 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
       vibe: [],
       host_flags: [],
     });
+    setTags([]);
+    setTagInput("");
   };
 
   const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
@@ -502,6 +535,8 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
       author: currentUser,
       requires_verification: !!activityDraft.requires_verification,
       requirements: reqDraft,
+      tags,
+      topic: tags.includes("圣诞") ? "christmas" : "",
     };
 
     setIsLoading(true);
@@ -560,17 +595,17 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     );
 
     const req = activity.requirements;
-    const tags: string[] = [];
+    const reqTags: string[] = [];
 
     if (req) {
-      if (req.gender === "female_only") tags.push("仅女生");
-      else if (req.gender === "male_only") tags.push("仅男生");
+      if (req.gender === "female_only") reqTags.push("仅女生");
+      else if (req.gender === "male_only") reqTags.push("仅男生");
 
-      if (req.identity === "undergrad") tags.push("本科");
-      else if (req.identity === "graduate") tags.push("研究生");
+      if (req.identity === "undergrad") reqTags.push("本科");
+      else if (req.identity === "graduate") reqTags.push("研究生");
 
-      if (req.stranger === "new_friends") tags.push("想认识新朋友");
-      else if (req.stranger === "has_circle") tags.push("有熟人也欢迎");
+      if (req.stranger === "new_friends") reqTags.push("想认识新朋友");
+      else if (req.stranger === "has_circle") reqTags.push("有熟人也欢迎");
 
       const vibeMap: Record<string, string> = {
         quiet: "偏安静",
@@ -580,7 +615,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
         i_friendly: "I人友好",
         e_friendly: "E人友好",
       };
-      (req.vibe || []).slice(0, 2).forEach(k => tags.push(vibeMap[k] || k));
+      (req.vibe || []).slice(0, 2).forEach(k => reqTags.push(vibeMap[k] || k));
 
       const hostMap: Record<string, string> = {
         welcome_first_timer: "欢迎新手",
@@ -589,7 +624,7 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
         will_reply: "会在局内回复",
         no_gender_mind: "不介意性别/专业",
       };
-      (req.host_flags || []).slice(0, 1).forEach(k => tags.push(hostMap[k] || k));
+      (req.host_flags || []).slice(0, 1).forEach(k => reqTags.push(hostMap[k] || k));
     }
 
     if (isAuthor) {
@@ -677,14 +712,23 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
           <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
         </div>
         <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
-        {tags.length > 0 && (
+        {reqTags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
-            {tags.slice(0, 6).map((t) => (
+            {reqTags.slice(0, 6).map((t) => (
               <span
                 key={t}
                 className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600"
               >
                 {t}
+              </span>
+            ))}
+          </div>
+        )}
+        {(activity.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {(activity.tags || []).slice(0, 3).map(t => (
+              <span key={t} className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-black">
+                #{t}
               </span>
             ))}
           </div>
@@ -937,7 +981,36 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
               </div>
             </div>
 
-            <div className="flex p-1.5 bg-white rounded-2xl shadow-sm gap-1">{(["全部", "约饭", "拼单"] as const).map(cat => (<button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeCategory === cat ? `${theme.primary} text-white shadow-md` : "text-gray-400 hover:bg-gray-50"}`}>{cat}</button>))}</div>
+            <div className="flex items-center gap-2">
+              <button
+                className="px-4 py-2 rounded-xl bg-red-50 text-red-700 font-black"
+                onClick={() => { setTagFilter("圣诞"); setActiveCategory("全部"); }}
+              >
+                🎄 圣诞专题
+              </button>
+              {tagFilter && (
+                <button
+                  className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
+                  onClick={() => setTagFilter("")}
+                >
+                  清除专题
+                </button>
+              )}
+            </div>
+
+            <div className="flex p-1.5 bg-white rounded-2xl shadow-sm gap-1 flex-wrap">
+              {(["全部", ...CATEGORY_OPTIONS] as const).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => { setActiveCategory(cat as any); setTagFilter(""); }}
+                  className={`flex-1 min-w-[45%] py-2.5 rounded-xl text-sm font-bold transition-all ${
+                    activeCategory === cat ? `${theme.primary} text-white shadow-md` : "text-gray-400 hover:bg-gray-50"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
           </div>
         )}
@@ -1272,30 +1345,22 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
     {/* 分类 */}
     <div className="space-y-2">
       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label>
-      <div className="flex gap-4">
-        <label className="flex-1 cursor-pointer">
-          <input
-            type="radio"
-            checked={activityDraft.category === "约饭"}
-            onChange={() => setActivityDraft(p => ({ ...p, category: "约饭" }))}
-            className="peer hidden"
-          />
-          <div className="bg-gray-100 peer-checked:bg-orange-500 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all">
-            <Utensils size={16}/> 约饭
-          </div>
-        </label>
-
-        <label className="flex-1 cursor-pointer">
-          <input
-            type="radio"
-            checked={activityDraft.category === "拼单"}
-            onChange={() => setActivityDraft(p => ({ ...p, category: "拼单" }))}
-            className="peer hidden"
-          />
-          <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold flex items-center justify-center gap-2 transition-all">
-            <ShoppingBag size={16}/> 拼单
-          </div>
-        </label>
+      <div className="grid grid-cols-2 gap-3">
+        {CATEGORY_OPTIONS.map((c) => (
+          <label key={c} className="flex-1 cursor-pointer">
+            <input
+              type="radio"
+              name="category"
+              value={c}
+              checked={activityDraft.category === c}
+              onChange={() => setActivityDraft(p => ({ ...p, category: c }))}
+              className="peer hidden"
+            />
+            <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold transition-all">
+              {c}
+            </div>
+          </label>
+        ))}
       </div>
     </div>
 
@@ -1438,6 +1503,50 @@ const [needPwdChange, setNeedPwdChange] = useState(false);
         placeholder="年级要求、口味偏好、具体流程..."
         className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm"
       />
+    </div>
+
+    {/* 标签 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标签</label>
+
+      <div className="flex gap-2">
+        <input
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
+          className="flex-1 bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+          placeholder="输入标签，回车添加（最多6个）"
+        />
+        <button
+          type="button"
+          onClick={() => addTag(tagInput)}
+          className="px-4 rounded-2xl bg-black text-white font-bold"
+        >
+          添加
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {['圣诞','跨年','期末','演唱会'].map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => addTag(t)}
+            className="px-3 py-1 rounded-full bg-white border border-gray-200 text-sm font-bold"
+          >
+            #{t}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {tags.map(t => (
+          <span key={t} className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-black text-sm flex items-center gap-2">
+            #{t}
+            <button type="button" onClick={() => removeTag(t)} className="opacity-70 hover:opacity-100">×</button>
+          </span>
+        ))}
+      </div>
     </div>
 
     <div className="text-xs font-black text-gray-500 mt-1">
@@ -1632,10 +1741,12 @@ function RoomModal({
   const [chatText, setChatText] = useState("");
   const [lastTs, setLastTs] = useState(0);
   const [chatLoading, setChatLoading] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
+  const canChat = !!activity && !!currentUser && (activity.author === currentUser || (activity.joined_users || []).includes(currentUser));
 
   const SEAT_COUNT = 8;
 
@@ -1923,13 +2034,48 @@ function RoomModal({
             ✅ 你能看到“还有谁也在”，这就是房间感：减少尴尬，提高加入意愿。
           </div>
 
-          <div className="mt-4 bg-white/90 border border-white/60 rounded-[2rem] p-4 shadow-sm">
+        </div>
+
+        <div className="fixed left-0 right-0 bottom-0 bg-white/85 backdrop-blur border-t border-white/60 px-4 py-3 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-700 font-black active:scale-95"
+          >
+            返回
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (canChat) setShowChat(true); }}
+            disabled={!canChat}
+            className={`flex-1 py-4 rounded-2xl font-black text-sm transition active:scale-95
+    ${canChat ? "bg-black text-white" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
+          >
+            聊天
+          </button>
+        </div>
+        {!canChat && (
+          <div className="text-[11px] font-bold text-gray-300 mt-2 px-4">
+            加入活动后才能聊天
+          </div>
+        )}
+      </div>
+
+      {showChat && (
+        <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end">
+          <div className="w-full bg-white rounded-t-[2.5rem] p-5 shadow-2xl max-h-[75vh] flex flex-col">
             <div className="flex items-center justify-between mb-3">
-              <div className="font-black text-sm text-gray-800">房间聊天</div>
-              <div className="text-[11px] font-bold text-gray-400">{messages.length ? `已加载 ${messages.length} 条` : "还没有消息"}</div>
+              <div className="font-black text-base">房间聊天</div>
+              <button
+                type="button"
+                onClick={() => setShowChat(false)}
+                className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 font-black active:scale-95"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="h-56 overflow-y-auto space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {messages.length === 0 ? (
                 <div className="text-center text-[12px] font-bold text-gray-300 py-10">
                   先打个招呼吧 👋
@@ -1953,7 +2099,7 @@ function RoomModal({
               )}
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="pt-3 flex gap-2">
               <input
                 value={chatText}
                 onChange={(e) => setChatText(e.target.value)}
@@ -1981,24 +2127,7 @@ function RoomModal({
             </div>
           </div>
         </div>
-
-        <div className="fixed left-0 right-0 bottom-0 bg-white/85 backdrop-blur border-t border-white/60 px-4 py-3 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-700 font-black active:scale-95"
-          >
-            返回
-          </button>
-          <button
-            type="button"
-            onClick={() => alert("TODO：准备/聊天/邀请")}
-            className="flex-1 py-3 rounded-2xl bg-black text-white font-black active:scale-95"
-          >
-            准备
-          </button>
-        </div>
-      </div>
+      )}
 
       {profileOpen && (
         <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end justify-center">
