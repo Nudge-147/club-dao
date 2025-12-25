@@ -29,6 +29,14 @@ interface UserData {
   stats?: { completed_count?: number };
 }
 
+interface ChatMsg {
+  _id?: string;
+  activityId: string;
+  sender: string;
+  text: string;
+  created_at: number;
+}
+
 interface Activity {
   _id: string;
   title: string;
@@ -1620,6 +1628,10 @@ function RoomModal({
   const [profileUser, setProfileUser] = useState<UserData | null>(null);
   const [memberInfoMap, setMemberInfoMap] = useState<Record<string, UserData | null>>({});
   const [memberLoading, setMemberLoading] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [chatText, setChatText] = useState("");
+  const [lastTs, setLastTs] = useState(0);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
@@ -1683,6 +1695,42 @@ function RoomModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activity._id]);
 
+  useEffect(() => {
+    let stop = false;
+    let timer: any = null;
+
+    const pull = async () => {
+      if (!activity?._id || !currentUser) return;
+      try {
+        const res = await cloud.invoke("get-messages", {
+          activityId: activity._id,
+          username: currentUser,
+          since: lastTs,
+          limit: 100,
+        });
+        if (!stop && res?.ok && Array.isArray(res.data) && res.data.length) {
+          setMessages(prev => {
+            const exist = new Set(prev.map(m => `${m.sender}_${m.created_at}_${m.text}`));
+            const add = res.data.filter((m: ChatMsg) => !exist.has(`${m.sender}_${m.created_at}_${m.text}`));
+            return [...prev, ...add];
+          });
+          const newest = res.data[res.data.length - 1]?.created_at || lastTs;
+          setLastTs(Math.max(lastTs, newest));
+        }
+      } catch {}
+    };
+
+    pull();
+
+    timer = setInterval(pull, 2000);
+
+    return () => {
+      stop = true;
+      if (timer) clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity._id, currentUser, lastTs]);
+
   const openUserProfile = async (username: string) => {
     setProfileOpen(true);
     setProfileLoading(true);
@@ -1695,6 +1743,32 @@ function RoomModal({
       alert("获取档案失败（网络错误）");
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const sendChat = async () => {
+    const text = chatText.trim();
+    if (!text) return;
+    if (!activity?._id) return;
+
+    setChatLoading(true);
+    try {
+      const res = await cloud.invoke("send-message", {
+        activityId: activity._id,
+        username: currentUser,
+        text,
+      });
+
+      if (res?.ok) {
+        setChatText("");
+        const ts = res.created_at || Date.now();
+        setMessages(prev => [...prev, { activityId: activity._id, sender: currentUser, text, created_at: ts }]);
+        setLastTs(Math.max(lastTs, ts));
+      } else {
+        alert(res?.msg || "发送失败");
+      }
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -1849,12 +1923,61 @@ function RoomModal({
             ✅ 你能看到“还有谁也在”，这就是房间感：减少尴尬，提高加入意愿。
           </div>
 
-          <div className="mt-5 bg-white/70 rounded-3xl border border-white/60 p-4">
-            <div className="text-xs font-black text-gray-600 mb-2">
-              聊天区域（下一步做）
+          <div className="mt-4 bg-white/90 border border-white/60 rounded-[2rem] p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-black text-sm text-gray-800">房间聊天</div>
+              <div className="text-[11px] font-bold text-gray-400">{messages.length ? `已加载 ${messages.length} 条` : "还没有消息"}</div>
             </div>
-            <div className="text-sm font-bold text-gray-400">
-              这里将会出现群聊输入框与消息列表。
+
+            <div className="h-56 overflow-y-auto space-y-2 pr-1">
+              {messages.length === 0 ? (
+                <div className="text-center text-[12px] font-bold text-gray-300 py-10">
+                  先打个招呼吧 👋
+                </div>
+              ) : (
+                messages.map((m, i) => {
+                  const mine = m.sender === currentUser;
+                  return (
+                    <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${mine ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}>
+                        <div className={`text-[10px] font-black ${mine ? "text-white/70" : "text-gray-500"}`}>
+                          {mine ? "你" : m.sender}
+                        </div>
+                        <div className="text-[13px] font-bold whitespace-pre-wrap break-words">
+                          {m.text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <input
+                value={chatText}
+                onChange={(e) => setChatText(e.target.value)}
+                placeholder="说点什么…"
+                className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 font-bold text-sm outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendChat();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={sendChat}
+                disabled={chatLoading}
+                className="px-4 py-3 rounded-2xl bg-black text-white font-black text-sm active:scale-95 disabled:opacity-60"
+              >
+                发送
+              </button>
+            </div>
+
+            <div className="mt-2 text-[10px] font-bold text-gray-300">
+              仅加入本活动的成员可见/可发言
             </div>
           </div>
         </div>
