@@ -37,7 +37,7 @@ interface ChatMsg {
   created_at: number;
 }
 
-type CategoryType = "干饭搭子" | "咖啡学习" | "运动健身" | "桌游狼人" | "看展逛街" | "电影观影" | "旅行出游" | "夜跑骑行";
+type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
 
 interface Activity {
   _id: string;
@@ -73,7 +73,7 @@ const THEMES = {
 };
 
 type ThemeKey = keyof typeof THEMES;
-const CATEGORY_OPTIONS: CategoryType[] = ["干饭搭子", "咖啡学习", "运动健身", "桌游狼人", "看展逛街", "电影观影", "旅行出游", "夜跑骑行"];
+const CATEGORY_OPTIONS: CategoryType[] = ["美食搭子", "学习搭子", "运动健身", "桌游搭子", "逛街散步", "游戏搭子", "旅行搭子", "文艺演出"];
 
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -85,6 +85,8 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | CategoryType>("全部");
   const [tagFilter, setTagFilter] = useState<string>("");
+  const categoryFilter = activeCategory;
+  const setCategoryFilter = setActiveCategory;
   const [inputTimeStr, setInputTimeStr] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
@@ -566,6 +568,27 @@ const [tags, setTags] = useState<string[]>([]);
   const handleLogout = () => { localStorage.removeItem("club_username"); localStorage.removeItem("club_need_pwd_change"); setNeedPwdChange(false); setCurrentUser(""); setUserData(null); setVerifyEmail(""); setVerifyCode(""); setTempProfile({}); setIsEditingProfile(false); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
   const resetToInputName = () => { setLoginStep("inputName"); setLoginError(""); setLoginPassword(""); };
 
+  const CategoryBar = ({ value, onChange }: { value: "全部" | CategoryType; onChange: (c: "全部" | CategoryType) => void }) => (
+    <div
+      className="no-scrollbar overflow-x-auto whitespace-nowrap scroll-smooth snap-x snap-mandatory [-webkit-overflow-scrolling:touch]"
+      style={{ scrollbarWidth: "none" }}
+    >
+      <div className="flex gap-3">
+        {(["全部", ...CATEGORY_OPTIONS] as const).map(cat => (
+          <button
+            key={cat}
+            onClick={() => onChange(cat as any)}
+            className={`shrink-0 snap-start px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              value === cat ? `${theme.primary} text-white shadow-md` : "bg-white text-gray-500 border border-gray-100"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const ActivityCard = ({ activity, showJoinBtn = true, showSweepBtn = false }: { activity: Activity, showJoinBtn?: boolean, showSweepBtn?: boolean }) => {
     const [expanded, setExpanded] = useState(false);
     const joined = activity.joined_users || [];
@@ -988,29 +1011,17 @@ const [tags, setTags] = useState<string[]>([]);
               >
                 🎄 圣诞专题
               </button>
-              {tagFilter && (
-                <button
-                  className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
-                  onClick={() => setTagFilter("")}
-                >
-                  清除专题
-                </button>
-              )}
-            </div>
+            {tagFilter && (
+              <button
+                className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
+                onClick={() => setTagFilter("")}
+              >
+                清除专题
+              </button>
+            )}
+          </div>
 
-            <div className="flex p-1.5 bg-white rounded-2xl shadow-sm gap-1 flex-wrap">
-              {(["全部", ...CATEGORY_OPTIONS] as const).map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => { setActiveCategory(cat as any); setTagFilter(""); }}
-                  className={`flex-1 min-w-[45%] py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    activeCategory === cat ? `${theme.primary} text-white shadow-md` : "text-gray-400 hover:bg-gray-50"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            <CategoryBar value={categoryFilter} onChange={(cat) => { setCategoryFilter(cat); setTagFilter(""); }} />
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
           </div>
         )}
