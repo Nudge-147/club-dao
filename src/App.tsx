@@ -14,8 +14,8 @@ const CHRISTMAS_GIFTS = [
   "别着急变热闹，先让自己被温柔对待。",
 ];
 
-function pickRandomGift() {
-  const i = Math.floor(Math.random() * CHRISTMAS_GIFTS.length);
+function pickGift(seed: number) {
+  const i = Math.abs(seed) % CHRISTMAS_GIFTS.length;
   return CHRISTMAS_GIFTS[i];
 }
 
@@ -196,12 +196,25 @@ const [tags, setTags] = useState<string[]>([]);
 
   // ===== Christmas Step3 state =====
   const [showChristmasGift, setShowChristmasGift] = useState(false);
-  const [christmasGiftText, setChristmasGiftText] = useState<string>("");
+  const [giftText, setGiftText] = useState("");
+  const [giftSeed, setGiftSeed] = useState(0); // 用于“再来一个”刷新
 
   // 打开礼物
   const openChristmasGift = () => {
-    setChristmasGiftText(pickRandomGift());
+    const seed = Date.now();
+    setGiftSeed(seed);
+    setGiftText(pickGift(seed));
     setShowChristmasGift(true);
+  };
+
+  const closeChristmasGift = () => {
+    setShowChristmasGift(false);
+  };
+
+  const nextChristmasGift = () => {
+    const seed = giftSeed + 1;
+    setGiftSeed(seed);
+    setGiftText(pickGift(seed));
   };
 
   const lastWasChristmasRef = useRef(false);
@@ -1387,52 +1400,53 @@ const [tags, setTags] = useState<string[]>([]);
         </button>
       )}
 
-      {/* ✅ Step3：礼物弹窗 */}
-      {isChristmas && activeTab === "square" && showChristmasGift && (
+      {/* ✅ 圣诞礼物弹窗 */}
+      {showChristmasGift && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center"
-          onClick={() => setShowChristmasGift(false)}
+          className="fixed inset-0 z-[999] flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeChristmasGift}
         >
-          {/* 遮罩 */}
-          <div className="absolute inset-0 bg-black/60" />
+          {/* 背景遮罩 */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
-          {/* 弹窗 */}
+          {/* 弹窗卡片 */}
           <div
-            className="relative w-[92vw] max-w-md rounded-3xl bg-white text-[#0B1220] shadow-2xl overflow-hidden"
-            style={{ animation: "floatIn .18s ease-out both" }}
+            className="relative w-[92vw] max-w-md rounded-3xl bg-white shadow-2xl p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-xs font-black text-[#0F3D2E] tracking-widest">
-                    🎄 圣诞小礼物
-                  </div>
-                  <div className="text-lg font-black mt-2">
-                    Merry Christmas
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowChristmasGift(false)}
-                  className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="mt-5 text-base leading-relaxed font-semibold text-gray-800 whitespace-pre-line">
-                {christmasGiftText}
-              </div>
-
-              <div className="mt-6 w-full rounded-2xl bg-[#0F3D2E] text-white py-4 font-black text-center">
-                🎁
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-black text-gray-400">圣诞小惊喜</div>
+                <div className="text-2xl font-black mt-1">🎁 你的礼物</div>
               </div>
 
               <button
-                onClick={() => setShowChristmasGift(false)}
-                className="mt-4 w-full rounded-2xl bg-black text-white py-4 font-black"
+                onClick={closeChristmasGift}
+                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-black"
+                aria-label="close"
               >
-                我知道了 🎄
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-gray-900 text-base font-bold leading-relaxed">
+              {giftText}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={closeChristmasGift}
+                className="flex-1 h-12 rounded-2xl bg-black text-white font-black"
+              >
+                收下 🎄
+              </button>
+              <button
+                onClick={nextChristmasGift}
+                className="flex-1 h-12 rounded-2xl bg-gray-100 text-gray-900 font-black"
+              >
+                再来一个
               </button>
             </div>
           </div>
