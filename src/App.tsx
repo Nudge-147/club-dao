@@ -1618,12 +1618,54 @@ function RoomModal({
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileUser, setProfileUser] = useState<UserData | null>(null);
+  const [memberInfoMap, setMemberInfoMap] = useState<Record<string, UserData | null>>({});
+  const [memberLoading, setMemberLoading] = useState(false);
 
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
 
   const avatarText = (name: string) => (name?.trim()?.slice(0, 1) || "?");
+
+  useEffect(() => {
+    const joined = activity.joined_users || [];
+    if (!joined.length) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setMemberLoading(true);
+      try {
+        const need = joined.filter(u => !memberInfoMap[u]);
+
+        if (!need.length) return;
+
+        const results = await Promise.all(
+          need.map(async (u) => {
+            try {
+              const res = await cloud.invoke("user-ops", { type: "get-info", username: u });
+              return [u, res || null] as const;
+            } catch {
+              return [u, null] as const;
+            }
+          })
+        );
+
+        if (cancelled) return;
+
+        setMemberInfoMap(prev => {
+          const next = { ...prev };
+          for (const [u, data] of results) next[u] = data;
+          return next;
+        });
+      } finally {
+        if (!cancelled) setMemberLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity._id]);
 
   const openUserProfile = async (username: string) => {
     setProfileOpen(true);
@@ -1677,43 +1719,65 @@ function RoomModal({
         </div>
 
         <div className="flex-1 px-4 mt-4 overflow-y-auto pb-24">
-          <div className="text-sm font-black text-gray-700 mb-3">
-            已加入的同学（点头像下一步做“个人档案”）
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-black text-gray-700">
+              已加入的同学
+            </div>
+            {memberLoading && (
+              <div className="text-[11px] font-black text-gray-400">加载成员档案…</div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {joined.map((name) => {
               const isMe = name === currentUser;
+              const info = memberInfoMap[name] || null;
+              const mbti = info?.profile?.mbti || "未填写";
+              const grade = info?.profile?.grade || "未填写";
+
+              const avatarText = (name?.trim()?.slice(0, 1) || "?");
+
               return (
                 <button
                   key={name}
                   type="button"
                   onClick={() => openUserProfile(name)}
-                  className="bg-white/80 rounded-3xl p-4 border border-white/60 shadow-sm active:scale-[0.99] text-left"
+                  className="bg-white/85 rounded-3xl p-4 border border-white/70 shadow-sm active:scale-[0.99] text-left"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${
-                          isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {avatarText(name)}
-                      </div>
-                      <div>
-                        <div className="font-black text-sm text-gray-900">
-                          {name}
-                          {isMe ? <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-black text-white">你</span> : null}
-                        </div>
-                        <div className="text-[11px] font-bold text-gray-500">
-                          点击查看档案
-                        </div>
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${
+                        isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {avatarText}
                     </div>
 
-                    <div className="text-[10px] font-black px-2 py-1 rounded-full bg-green-50 text-green-600 border border-green-100">
-                      已加入
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-black text-sm text-gray-900 truncate">
+                          {name}
+                        </div>
+                        {isMe && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black text-white font-black">
+                            你
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                          MBTI · {mbti}
+                        </span>
+                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                          年级 · {grade}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="mt-3 text-[11px] font-bold text-gray-400">
+                    点击查看档案
                   </div>
                 </button>
               );
