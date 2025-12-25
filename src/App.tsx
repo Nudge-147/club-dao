@@ -1,7 +1,38 @@
 import code4teamQR from "./assets/code4team.jpg";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
+
+// ===== Christmas Step1 + Step3 helpers =====
+
+const CHRISTMAS_CATEGORY_KEYS = [
+  "圣诞专题",
+  "圣诞",
+  "Christmas",
+  "christmas",
+];
+
+// 你项目里分类值如果是中文（比如“圣诞专题”）就会命中
+function isChristmasCategory(cat: any) {
+  const s = String(cat ?? "");
+  if (!s) return false;
+  if (CHRISTMAS_CATEGORY_KEYS.includes(s)) return true;
+  // 兼容：包含“圣诞”也算
+  return s.includes("圣诞");
+}
+
+const CHRISTMAS_GIFTS = [
+  "你不是来凑热闹的，你是被等的。",
+  "如果你不知道去哪，就先坐在这棵树下。",
+  "今天不需要特别勇敢，也会有人愿意和你一起。",
+  "圣诞快乐。你能点开这里，本身就很珍贵。",
+  "别着急变热闹，先让自己被温柔对待。",
+];
+
+function pickRandomGift() {
+  const i = Math.floor(Math.random() * CHRISTMAS_GIFTS.length);
+  return CHRISTMAS_GIFTS[i];
+}
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -176,6 +207,18 @@ const [tags, setTags] = useState<string[]>([]);
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
 
+  // ===== Christmas Step3 state =====
+  const [showChristmasGift, setShowChristmasGift] = useState(false);
+  const [christmasGiftText, setChristmasGiftText] = useState<string>("");
+
+  // 打开礼物
+  const openChristmasGift = () => {
+    setChristmasGiftText(pickRandomGift());
+    setShowChristmasGift(true);
+  };
+
+  const lastWasChristmasRef = useRef(false);
+
 
   // --- 隐藏成就：社群会员盲盒 ---
   const [showSecret, setShowSecret] = useState(false);
@@ -187,6 +230,7 @@ const [tags, setTags] = useState<string[]>([]);
   const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
+  const isChristmas = isChristmasCategory(activeCategory);
 
   useEffect(() => {
     const savedName = localStorage.getItem("club_username");
@@ -263,6 +307,13 @@ const [tags, setTags] = useState<string[]>([]);
       return matchSearch && matchCategory && matchTag && isActive && !expired && !isHidden;
     });
   }, [activities, searchTerm, activeCategory, currentUser, tagFilter]);
+
+  useEffect(() => {
+    if (isChristmas && !lastWasChristmasRef.current) {
+      openChristmasGift();
+    }
+    lastWasChristmasRef.current = isChristmas;
+  }, [isChristmas]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) { 
@@ -955,7 +1006,25 @@ const [tags, setTags] = useState<string[]>([]);
   };
 
   return (
-    <div className={`min-h-screen font-sans text-slate-900 pb-32 transition-colors duration-500 ${theme.bg}`}>
+    <div
+      className={
+        isChristmas
+          ? "min-h-screen bg-[#0F3D2E] text-white font-sans pb-32"
+          : "min-h-screen bg-[#F4F8FF] text-[#0B1220] font-sans pb-32 transition-colors duration-500"
+      }
+    >
+      <style>{`
+      @keyframes giftWiggle {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        25% { transform: translateY(-2px) rotate(-2deg); }
+        50% { transform: translateY(0) rotate(2deg); }
+        75% { transform: translateY(-1px) rotate(-1deg); }
+      }
+      @keyframes floatIn {
+        0% { transform: translateY(10px) scale(0.98); opacity: 0; }
+        100% { transform: translateY(0) scale(1); opacity: 1; }
+      }
+    `}</style>
       {showLoginModal && (<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"><div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center"><h2 className="text-3xl font-black mb-8">ClubDAO</h2>{loginStep==="inputName"&&(<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>)}{loginStep==="nameTaken"&&(<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl text-sm font-bold">该代号已存在</div><button onClick={()=>setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold">是本人，去登录</button><button onClick={resetToInputName} className="w-full bg-white border p-4 rounded-xl font-bold">换个名字</button></div>)}{loginStep==="inputPassword"&&( <form onSubmit={handleLogin}><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>)}{loginStep==="createAccount"&&(<form onSubmit={handleRegister}><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设个密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册并登录</button></form>)}{loginError&&<p className="text-red-500 mt-4 font-bold">{loginError}</p>}</div></div>)}
       
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
@@ -1008,6 +1077,29 @@ const [tags, setTags] = useState<string[]>([]);
       <main className="p-6 max-w-md mx-auto space-y-6">
         {activeTab === 'square' && (
           <div className="animate-fade-in space-y-6">
+            {/* ✅ Step1：圣诞展示牌（只在圣诞专题出现） */}
+            {isChristmas && (
+              <div className="px-0">
+                <div className="rounded-3xl bg-gradient-to-r from-[#114B37] to-[#0F3D2E] border border-white/10 shadow-xl overflow-hidden">
+                  <div className="px-6 py-5 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black tracking-wide text-[#F5C97B]">
+                        🎄 圣诞专题
+                      </div>
+                      <div className="text-2xl font-black mt-1">搭子树</div>
+                      <div className="text-white/80 text-sm font-semibold mt-1">
+                        这棵树上，有你的位置
+                      </div>
+                    </div>
+                    <div className="text-3xl">🎁</div>
+                  </div>
+                  <div className="px-6 pb-5 text-white/70 text-xs font-bold">
+                    点一下礼物，收下你的圣诞小惊喜
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="relative group"><Search className="absolute left-4 top-3.5 text-gray-400" size={20} /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="寻找下一场活动..." className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl font-bold outline-none shadow-sm" /></div>
 
             {/* 社团官方公告 */}
@@ -1272,6 +1364,74 @@ const [tags, setTags] = useState<string[]>([]);
           </div>
         )}
       </main>
+
+      {/* ✅ Step3：礼物按钮（只在圣诞专题显示） */}
+      {isChristmas && activeTab === "square" && (
+        <button
+          onClick={openChristmasGift}
+          className="fixed bottom-6 right-6 z-[60] select-none"
+          aria-label="Christmas gift"
+        >
+          <div
+            className="w-14 h-14 rounded-2xl bg-[#F5C97B] text-[#0F3D2E] shadow-2xl flex items-center justify-center text-2xl"
+            style={{ animation: "giftWiggle 3s ease-in-out infinite" }}
+          >
+            🎁
+          </div>
+        </button>
+      )}
+
+      {/* ✅ Step3：礼物弹窗 */}
+      {isChristmas && activeTab === "square" && showChristmasGift && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center"
+          onClick={() => setShowChristmasGift(false)}
+        >
+          {/* 遮罩 */}
+          <div className="absolute inset-0 bg-black/60" />
+
+          {/* 弹窗 */}
+          <div
+            className="relative w-[92vw] max-w-md rounded-3xl bg-white text-[#0B1220] shadow-2xl overflow-hidden"
+            style={{ animation: "floatIn .18s ease-out both" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-xs font-black text-[#0F3D2E] tracking-widest">
+                    🎄 圣诞小礼物
+                  </div>
+                  <div className="text-lg font-black mt-2">
+                    Merry Christmas
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowChristmasGift(false)}
+                  className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-black"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-5 text-base leading-relaxed font-semibold text-gray-800 whitespace-pre-line">
+                {christmasGiftText}
+              </div>
+
+              <div className="mt-6 w-full rounded-2xl bg-[#0F3D2E] text-white py-4 font-black text-center">
+                🎁
+              </div>
+
+              <button
+                onClick={() => setShowChristmasGift(false)}
+                className="mt-4 w-full rounded-2xl bg-black text-white py-4 font-black"
+              >
+                我知道了 🎄
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 悬浮按钮与底部导航 */}
       {activeTab === 'square' && (<button onClick={() => { resetCreateDraft(); setShowCreateModal(true); }} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
