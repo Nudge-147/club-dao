@@ -1625,7 +1625,6 @@ function RoomModal({
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
 
-  const avatarText = (name: string) => (name?.trim()?.slice(0, 1) || "?");
 
   useEffect(() => {
     const joined = activity.joined_users || [];
