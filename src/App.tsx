@@ -1632,8 +1632,11 @@ function RoomModal({
     const list: string[] = [];
     const pushUniq = (u: string) => { if (u && !list.includes(u)) list.push(u); };
 
+    // 房主永远 #1
     pushUniq(activity.author);
-    joined.forEach(pushUniq);
+
+    // joined_users 里剔除房主后按原顺序入座
+    joined.filter(u => u !== activity.author).forEach(pushUniq);
 
     return list.slice(0, SEAT_COUNT);
   })();
@@ -1776,7 +1779,7 @@ function RoomModal({
                     "relative rounded-[2rem] p-4 text-left transition active:scale-[0.99]",
                     empty
                       ? "bg-white/40 border border-dashed border-gray-200 text-gray-300"
-                      : "bg-white/85 border border-white/60 shadow-sm",
+                      : "bg-white/85 border border-white/60 shadow-sm animate-seat-in",
                   ].join(" ")}
                 >
                   {/* 角标：座位号 */}
@@ -1817,10 +1820,10 @@ function RoomModal({
 
                     <div className="min-w-0 flex-1">
                       <div className={`font-black text-sm ${empty ? "text-gray-300" : "text-gray-900"} truncate`}>
-                        {empty ? "空位" : u}
+                        {empty ? "空座" : u}
                       </div>
                       <div className={`text-[11px] font-bold mt-1 ${empty ? "text-gray-300" : "text-gray-400"}`}>
-                        {empty ? "等待加入" : "点击查看档案"}
+                        {empty ? "加入后你会坐在这里" : "点击查看档案"}
                       </div>
                     </div>
                   </div>
