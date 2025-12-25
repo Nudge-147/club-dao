@@ -5,21 +5,6 @@ import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutG
 
 // ===== Christmas Step1 + Step3 helpers =====
 
-const CHRISTMAS_CATEGORY_KEYS = [
-  "圣诞专题",
-  "圣诞",
-  "Christmas",
-  "christmas",
-];
-
-// 你项目里分类值如果是中文（比如“圣诞专题”）就会命中
-function isChristmasCategory(cat: any) {
-  const s = String(cat ?? "");
-  if (!s) return false;
-  if (CHRISTMAS_CATEGORY_KEYS.includes(s)) return true;
-  // 兼容：包含“圣诞”也算
-  return s.includes("圣诞");
-}
 
 const CHRISTMAS_GIFTS = [
   "你不是来凑热闹的，你是被等的。",
@@ -206,6 +191,8 @@ const [tags, setTags] = useState<string[]>([]);
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
+  const [christmasMode, setChristmasMode] = useState(false);
+  const [christmasOnly, setChristmasOnly] = useState(false);
 
   // ===== Christmas Step3 state =====
   const [showChristmasGift, setShowChristmasGift] = useState(false);
@@ -230,7 +217,7 @@ const [tags, setTags] = useState<string[]>([]);
   const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
-  const isChristmas = isChristmasCategory(activeCategory);
+  const isChristmas = christmasMode;
 
   useEffect(() => {
     const savedName = localStorage.getItem("club_username");
@@ -299,21 +286,22 @@ const [tags, setTags] = useState<string[]>([]);
       const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || a.category === activeCategory;
       const matchTag = !tagFilter || (a.tags || []).includes(tagFilter);
+      const matchChristmas = !christmasOnly || (a.tags || []).some(t => t === "圣诞" || t === "跨年");
 
       const isActive = (a.status || 'active') === 'active';
       const isHidden = (a.hidden_by || []).includes(currentUser);
       const expired = isExpired(a);
 
-      return matchSearch && matchCategory && matchTag && isActive && !expired && !isHidden;
+      return matchSearch && matchCategory && matchTag && matchChristmas && isActive && !expired && !isHidden;
     });
-  }, [activities, searchTerm, activeCategory, currentUser, tagFilter]);
+  }, [activities, searchTerm, activeCategory, currentUser, tagFilter, christmasOnly]);
 
   useEffect(() => {
-    if (isChristmas && !lastWasChristmasRef.current) {
+    if (isChristmas && !lastWasChristmasRef.current && !showChristmasGift) {
       openChristmasGift();
     }
     lastWasChristmasRef.current = isChristmas;
-  }, [isChristmas]);
+  }, [isChristmas, showChristmasGift]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) { 
@@ -1137,22 +1125,40 @@ const [tags, setTags] = useState<string[]>([]);
 
             <div className="flex items-center gap-2">
               <button
-                className="px-4 py-2 rounded-xl bg-red-50 text-red-700 font-black"
-                onClick={() => { setTagFilter("圣诞"); setActiveCategory("全部"); }}
+                onClick={() => {
+                  setChristmasMode(true);
+                  setChristmasOnly(true);
+                  setActiveCategory("全部");
+                  setTagFilter("");
+                  openChristmasGift();
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-red-500 font-black shadow"
               >
                 🎄 圣诞专题
               </button>
-            {tagFilter && (
-              <button
-                className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
-                onClick={() => setTagFilter("")}
-              >
-                清除专题
-              </button>
-            )}
-          </div>
+              {(tagFilter || christmasMode) && (
+                <button
+                  className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
+                  onClick={() => {
+                    setTagFilter("");
+                    setChristmasMode(false);
+                    setChristmasOnly(false);
+                  }}
+                >
+                  清除专题
+                </button>
+              )}
+            </div>
 
-            <CategoryBar value={categoryFilter} onChange={(cat) => { setCategoryFilter(cat); setTagFilter(""); }} />
+            <CategoryBar
+              value={categoryFilter}
+              onChange={(cat) => {
+                setCategoryFilter(cat);
+                setTagFilter("");
+                setChristmasMode(false);
+                setChristmasOnly(false);
+              }}
+            />
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
           </div>
         )}
