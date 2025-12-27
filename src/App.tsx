@@ -54,6 +54,7 @@ interface ChatMsg {
 }
 
 type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
+type CampusType = "仙林" | "鼓楼" | "苏州" | "浦口" | "不限";
 
 interface Activity {
   _id: string;
@@ -63,6 +64,7 @@ interface Activity {
   min_people?: number;
   time: string;
   location: string;
+  campus?: CampusType;
   author: string;
   category: string;
   soul_question?: string;
@@ -86,6 +88,7 @@ interface ActivityDraft {
   title: string;
   description: string;
   category: CategoryType;
+  campus: CampusType;
   location: string;
   min_people: string;
   max_people: string;
@@ -125,6 +128,7 @@ function App() {
     title: "",
     description: "",
     category: CATEGORY_OPTIONS[0],
+    campus: "不限",
     location: "",
     min_people: "",
     max_people: "",
@@ -372,6 +376,7 @@ const [tags, setTags] = useState<string[]>([]);
       title: "",
       description: "",
       category: CATEGORY_OPTIONS[0],
+      campus: "不限",
       location: "",
       min_people: "",
       max_people: "",
@@ -603,6 +608,7 @@ const [tags, setTags] = useState<string[]>([]);
     const location = (activityDraft.location || "").trim();
     const description = (activityDraft.description || "").trim();
     const category = activityDraft.category || "约饭";
+    const campus = activityDraft.campus || "不限";
     const { minVal, maxVal } = normalizePeople();
     const timeString = inputTimeStr.trim();
     const soulQuestion = (activityDraft.soul_question || "").trim();
@@ -623,6 +629,7 @@ const [tags, setTags] = useState<string[]>([]);
       min_people: minVal,
       time: timeString,
       location,
+      campus,
       author: currentUser,
       requires_verification: !!activityDraft.requires_verification,
       requirements: reqDraft,
@@ -1582,220 +1589,78 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             {createStep === 1 && (
-  <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* 1. 校区选择：实景感大卡片 */}
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">📍 你在哪儿开局？</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(["仙林", "鼓楼", "苏州", "浦口", "不限"] as CampusType[]).map((cp) => (
+                      <button
+                        key={cp}
+                        type="button"
+                        onClick={() => setActivityDraft(p => ({ ...p, campus: cp }))}
+                        className={`relative overflow-hidden p-5 rounded-[2rem] border-2 transition-all active:scale-95 ${
+                          activityDraft.campus === cp 
+                          ? "border-black bg-black text-white shadow-xl" 
+                          : "border-gray-100 bg-gray-50 text-gray-500"
+                        }`}
+                      >
+                        <div className="text-lg font-black">{cp}</div>
+                        <div className={`text-[10px] font-bold opacity-60 ${activityDraft.campus === cp ? "text-white" : "text-gray-400"}`}>
+                          {cp === "不限" ? "全校区可见" : "校区精准匹配"}
+                        </div>
+                        {/* 装饰性背景字母 */}
+                        <div className="absolute -right-2 -bottom-2 text-4xl font-black opacity-10 italic">
+                          {cp.charAt(0)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-    {/* 分类 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label>
-      <div className="grid grid-cols-2 gap-3">
-        {CATEGORY_OPTIONS.map((c) => (
-          <label key={c} className="flex-1 cursor-pointer">
-            <input
-              type="radio"
-              name="category"
-              value={c}
-              checked={activityDraft.category === c}
-              onChange={() => setActivityDraft(p => ({ ...p, category: c }))}
-              className="peer hidden"
-            />
-            <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold transition-all">
-              {c}
-            </div>
-          </label>
-        ))}
-      </div>
-    </div>
+                {/* 2. 分类选择：Emoji 宫格卡片 */}
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">🎭 这局玩什么？</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {CATEGORY_OPTIONS.map((c) => {
+                      const icons: Record<string, string> = { "美食搭子": "🍱", "学习搭子": "📚", "运动健身": "🏃", "桌游搭子": "🃏" };
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setActivityDraft(p => ({ ...p, category: c }))}
+                          className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                            activityDraft.category === c 
+                            ? "border-blue-500 bg-blue-50 text-blue-700" 
+                            : "border-gray-100 bg-white text-gray-400"
+                          }`}
+                        >
+                          <span className="text-2xl">{icons[c] || "✨"}</span>
+                          <span className="font-black text-sm">{c}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-    {/* 标题 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label>
-      <input
-        value={activityDraft.title}
-        onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
-        required
-        className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent"
-        placeholder="例如：周末火锅局"
-      />
-    </div>
+                {/* 3. 基础信息：极简输入 */}
+                <div className="space-y-4">
+                  <div className="group">
+                    <label className="text-xs font-black text-gray-400 uppercase ml-1">给房间起个响亮的名字</label>
+                    <input
+                      value={activityDraft.title}
+                      onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
+                      className="w-full text-2xl font-black border-b-4 border-gray-100 py-3 outline-none focus:border-black transition-colors bg-transparent placeholder:text-gray-200"
+                      placeholder="例如：仙林火锅速来"
+                    />
+                  </div>
+                </div>
 
-    {/* 时间（你这个本来就是 state，保持不动） */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <select
-          value={dateState.year}
-          onChange={e => handleDateChange("year", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(2025, 2030).map(y => (
-            <option key={y} value={y}>{y} 年</option>
-          ))}
-        </select>
-        <select
-          value={dateState.month}
-          onChange={e => handleDateChange("month", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(1, 12).map(m => (
-            <option key={m} value={m}>{m} 月</option>
-          ))}
-        </select>
-        <select
-          value={dateState.day}
-          onChange={e => handleDateChange("day", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => (
-            <option key={d} value={d}>{d} 日</option>
-          ))}
-        </select>
-        <select
-          value={dateState.hour}
-          onChange={e => handleDateChange("hour", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(0, 23).map(h => (
-            <option key={h} value={h}>{h} 时</option>
-          ))}
-        </select>
-        <select
-          value={dateState.minute}
-          onChange={e => handleDateChange("minute", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(0, 59).map(mi => (
-            <option key={mi} value={mi}>{mi} 分</option>
-          ))}
-        </select>
-      </div>
-    </div>
-
-    {/* 地点 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label>
-      <input
-        value={activityDraft.location}
-        onChange={e => setActivityDraft(p => ({ ...p, location: e.target.value }))}
-        required
-        className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-      />
-    </div>
-
-    {/* 人数 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label>
-      <div className="flex gap-4 items-center">
-        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-          <span className="text-xs text-gray-400 font-bold">最少</span>
-          <input
-            type="number"
-            placeholder="2"
-            value={activityDraft.min_people}
-            onChange={e =>
-              setActivityDraft(p => ({ ...p, min_people: e.target.value }))
-            }
-            className="w-full bg-transparent font-bold outline-none text-center"
-          />
-        </div>
-
-        <span className="text-gray-300 font-bold">-</span>
-
-        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-          <span className="text-xs text-gray-400 font-bold">最多</span>
-          <input
-            type="number"
-            placeholder="5"
-            value={activityDraft.max_people}
-            onChange={e =>
-              setActivityDraft(p => ({ ...p, max_people: e.target.value }))
-            }
-            className="w-full bg-transparent font-bold outline-none text-center"
-          />
-        </div>
-      </div>
-    </div>
-
-    {/* 仅限认证 */}
-    <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700">
-          <ShieldCheck size={20}/>
-        </div>
-        <div>
-          <div className="font-bold text-sm text-purple-900">仅限认证校友</div>
-          <div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div>
-        </div>
-      </div>
-
-      <input
-        type="checkbox"
-        checked={activityDraft.requires_verification}
-        onChange={e =>
-          setActivityDraft(p => ({ ...p, requires_verification: e.target.checked }))
-        }
-      />
-    </div>
-
-    {/* 详情 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label>
-      <textarea
-        value={activityDraft.description}
-        onChange={e => setActivityDraft(p => ({ ...p, description: e.target.value }))}
-        placeholder="年级要求、口味偏好、具体流程..."
-        className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm"
-      />
-    </div>
-
-    {/* 标签 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标签</label>
-
-      <div className="flex gap-2">
-        <input
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
-          className="flex-1 bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-          placeholder="输入标签，回车添加（最多6个）"
-        />
-        <button
-          type="button"
-          onClick={() => addTag(tagInput)}
-          className="px-4 rounded-2xl bg-black text-white font-bold"
-        >
-          添加
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-2 pt-1">
-        {['圣诞','跨年','期末','演唱会'].map(t => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => addTag(t)}
-            className="px-3 py-1 rounded-full bg-white border border-gray-200 text-sm font-bold"
-          >
-            #{t}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {tags.map(t => (
-          <span key={t} className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-black text-sm flex items-center gap-2">
-            #{t}
-            <button type="button" onClick={() => removeTag(t)} className="opacity-70 hover:opacity-100">×</button>
-          </span>
-        ))}
-      </div>
-    </div>
-
-    <div className="text-xs font-black text-gray-500 mt-1">
-      先把活动信息填清楚，下一步再设置“门槛与氛围”。
-    </div>
-  </div>
-      )}
+                <div className="text-[11px] font-bold text-gray-400 bg-gray-50 p-4 rounded-2xl border border-dashed">
+                  💡 <span className="text-gray-600">心理提示：</span> 选好校区和类型，能帮你过滤掉 **80%** 不匹配的尴尬。
+                </div>
+              </div>
+            )}
 
 
             {createStep === 2 && (
