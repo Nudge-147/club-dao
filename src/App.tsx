@@ -1,7 +1,7 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone } from "lucide-react";
 
 // ===== New Year helpers =====
 
@@ -442,26 +442,8 @@ const [tags, setTags] = useState<string[]>([]);
 
   const SECRET_DEADLINE_STR = "2025-01-05T23:59:59";
   const secretDeadline = new Date(SECRET_DEADLINE_STR);
-  const secretDeadlineTs = secretDeadline.getTime();
   const secretDeadlineLabel = `${(secretDeadline.getMonth() + 1).toString().padStart(2, "0")}/${secretDeadline.getDate().toString().padStart(2, "0")} 截止`;
   const secretDeadlineChip = `${secretDeadline.getMonth() + 1} 月 ${secretDeadline.getDate()} 日截止`;
-  const calcSecretStatus = () => {
-    const now = Date.now();
-    const remainingMs = secretDeadlineTs - now;
-    if (remainingMs <= 0) {
-      return { isExpired: true, daysLeft: 0 };
-    }
-    return {
-      isExpired: false,
-      daysLeft: Math.max(1, Math.ceil(remainingMs / (24 * 60 * 60 * 1000))),
-    };
-  };
-  const [secretStatus, setSecretStatus] = useState(calcSecretStatus);
-
-  useEffect(() => {
-    const timer = setInterval(() => setSecretStatus(calcSecretStatus()), 60 * 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const SECRET_BADGES = [
     "🟦 链上萌新",
@@ -477,10 +459,6 @@ const [tags, setTags] = useState<string[]>([]);
     if (!currentUser) return;
     if (secretBadge) {
       alert("你已经抽过徽章了（每人一次）");
-      return;
-    }
-    if (secretStatus.isExpired) {
-      alert("本期二维码入口已截止（后续会更新）");
       return;
     }
 
@@ -972,14 +950,8 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
           </div>
 
-          <div className="text-right">
-            <div className="text-[11px] font-black flex items-center gap-1 justify-end text-red-500">
-              <Timer size={14} />
-              剩余 {secretStatus.daysLeft} 天
-            </div>
-            <div className="text-[10px] font-bold text-gray-400">
-              {secretDeadlineLabel}
-            </div>
+          <div className="text-right text-[10px] font-bold text-gray-400">
+            {secretDeadlineLabel}
           </div>
         </button>
 
@@ -1023,18 +995,16 @@ const [tags, setTags] = useState<string[]>([]);
 
               <button
                 onClick={drawSecretBadge}
-                disabled={isDrawing || !!secretBadge || secretStatus.isExpired}
+                disabled={isDrawing || !!secretBadge}
                 className={`px-4 py-2 rounded-xl text-xs font-black transition active:scale-95 ${
-                  secretStatus.isExpired
-                    ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                    : secretBadge
+                  secretBadge
                     ? "bg-green-50 text-green-600 cursor-default"
                     : isDrawing
                     ? "bg-black text-white opacity-70"
                     : "bg-black text-white"
                 }`}
               >
-                {secretStatus.isExpired ? "已截止" : secretBadge ? "已抽取" : isDrawing ? "开奖中..." : "抽一次"}
+                {secretBadge ? "已抽取" : isDrawing ? "开奖中..." : "抽一次"}
               </button>
             </div>
 
