@@ -994,7 +994,7 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             <div className="mt-3 text-[11px] font-black text-red-500">
-              当前为最新一期二维码，{secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～
+              {secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～
             </div>
           </div>
 
