@@ -959,11 +959,11 @@ const [tags, setTags] = useState<string[]>([]);
           </div>
 
           <div className="text-right">
-            <div className={`text-[11px] font-black flex items-center gap-1 justify-end ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
+            <div className="text-[11px] font-black flex items-center gap-1 justify-end text-red-500">
               <Timer size={14} />
-              {isSecretExpired ? "已截止" : `剩余 ${daysLeft} 天`}
+              剩余 {daysLeft} 天
             </div>
-            <div className={`text-[10px] font-bold ${isSecretExpired ? "text-gray-300" : "text-gray-400"}`}>
+            <div className="text-[10px] font-bold text-gray-400">
               {secretDeadlineLabel}
             </div>
           </div>
@@ -994,9 +994,7 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             <div className="mt-3 text-[11px] font-black text-red-500">
-              {isSecretExpired
-                ? "本期入口已截止，稍后会更新下一期二维码。"
-                : `当前为最新一期二维码，${secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～`}
+              当前为最新一期二维码，{secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～
             </div>
           </div>
 
