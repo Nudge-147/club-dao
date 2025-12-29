@@ -3,20 +3,47 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, Timer, QrCode, BadgeCheck, Megaphone } from "lucide-react";
 
-// ===== Christmas Step1 + Step3 helpers =====
+// ===== New Year helpers =====
 
-
-const CHRISTMAS_GIFTS = [
-  "你不是来凑热闹的，你是被等的。",
-  "如果你不知道去哪，就先坐在这棵树下。",
-  "今天不需要特别勇敢，也会有人愿意和你一起。",
-  "圣诞快乐。你能点开这里，本身就很珍贵。",
-  "别着急变热闹，先让自己被温柔对待。",
+const NEW_YEAR_WISHES = [
+  "把想做的事情写下来，新的一年都去试试。",
+  "倒计时走起，跨年约上想见的人吧。",
+  "愿你遇见同频的伙伴，也遇见闪光的自己。",
+  "这一年辛苦了，来年的愿望我们一起实现。",
+  "在倒计时里，给自己一个大胆的开始。",
 ];
 
-function pickGift(seed: number) {
-  const i = Math.abs(seed) % CHRISTMAS_GIFTS.length;
-  return CHRISTMAS_GIFTS[i];
+const NEW_YEAR_TAGS = ["新年", "跨年", "倒计时"];
+
+type NewYearCountdown = {
+  targetYear: number;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+};
+
+function pickWish(seed: number) {
+  const i = Math.abs(seed) % NEW_YEAR_WISHES.length;
+  return NEW_YEAR_WISHES[i];
+}
+
+function calcNewYearCountdown(): NewYearCountdown {
+  const now = new Date();
+  const targetYear = now.getFullYear() + 1;
+  const target = new Date(targetYear, 0, 1, 0, 0, 0);
+  const diff = Math.max(0, target.getTime() - Date.now());
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const minuteMs = 60 * 1000;
+
+  return {
+    targetYear,
+    days: Math.floor(diff / dayMs),
+    hours: Math.floor((diff % dayMs) / hourMs),
+    minutes: Math.floor((diff % hourMs) / minuteMs),
+    seconds: Math.floor((diff % minuteMs) / 1000),
+  };
 }
 
 // --- 配置区域 ---
@@ -54,7 +81,6 @@ interface ChatMsg {
 }
 
 type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
-type CampusType = "仙林" | "鼓楼" | "苏州" | "浦口" | "不限";
 
 interface Activity {
   _id: string;
@@ -64,7 +90,6 @@ interface Activity {
   min_people?: number;
   time: string;
   location: string;
-  campus?: CampusType;
   author: string;
   category: string;
   soul_question?: string;
@@ -88,7 +113,6 @@ interface ActivityDraft {
   title: string;
   description: string;
   category: CategoryType;
-  campus: CampusType;
   location: string;
   min_people: string;
   max_people: string;
@@ -128,7 +152,6 @@ function App() {
     title: "",
     description: "",
     category: CATEGORY_OPTIONS[0],
-    campus: "不限",
     location: "",
     min_people: "",
     max_people: "",
@@ -195,33 +218,35 @@ const [tags, setTags] = useState<string[]>([]);
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
-  const [christmasMode, setChristmasMode] = useState(false);
-  const [christmasOnly, setChristmasOnly] = useState(false);
+  const [newYearMode, setNewYearMode] = useState(false);
+  const [newYearOnly, setNewYearOnly] = useState(false);
 
-  // ===== Christmas Step3 state =====
-  const [showChristmasGift, setShowChristmasGift] = useState(false);
-  const [giftText, setGiftText] = useState("");
-  const [giftSeed, setGiftSeed] = useState(0); // 用于“再来一个”刷新
+  // ===== 新年专题状态 =====
+  const [showNewYearWish, setShowNewYearWish] = useState(false);
+  const [wishText, setWishText] = useState("");
+  const [wishSeed, setWishSeed] = useState(0); // 用于“再来一个”刷新
+  const [newYearCountdown, setNewYearCountdown] = useState<NewYearCountdown>(() => calcNewYearCountdown());
 
-  // 打开礼物
-  const openChristmasGift = () => {
+  // 打开新年祝福
+  const openNewYearWish = () => {
     const seed = Date.now();
-    setGiftSeed(seed);
-    setGiftText(pickGift(seed));
-    setShowChristmasGift(true);
+    setWishSeed(seed);
+    setWishText(pickWish(seed));
+    setShowNewYearWish(true);
   };
 
-  const closeChristmasGift = () => {
-    setShowChristmasGift(false);
+  const closeNewYearWish = () => {
+    setShowNewYearWish(false);
   };
 
-  const nextChristmasGift = () => {
-    const seed = giftSeed + 1;
-    setGiftSeed(seed);
-    setGiftText(pickGift(seed));
+  const nextNewYearWish = () => {
+    const seed = wishSeed + 1;
+    setWishSeed(seed);
+    setWishText(pickWish(seed));
   };
 
-  const lastWasChristmasRef = useRef(false);
+  const lastWasNewYearRef = useRef(false);
+  const formatTwoDigits = (n: number) => n.toString().padStart(2, "0");
 
 
   // --- 隐藏成就：社群会员盲盒 ---
@@ -234,7 +259,7 @@ const [tags, setTags] = useState<string[]>([]);
   const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
-  const isChristmas = christmasMode;
+  const isNewYear = newYearMode;
 
   useEffect(() => {
     const savedName = localStorage.getItem("club_username");
@@ -249,6 +274,11 @@ const [tags, setTags] = useState<string[]>([]);
 
     const savedNeed = localStorage.getItem("club_need_pwd_change") === "1";
     setNeedPwdChange(savedNeed);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNewYearCountdown(calcNewYearCountdown()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const fetchActivities = async () => {
@@ -303,22 +333,22 @@ const [tags, setTags] = useState<string[]>([]);
       const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || a.category === activeCategory;
       const matchTag = !tagFilter || (a.tags || []).includes(tagFilter);
-      const matchChristmas = !christmasOnly || (a.tags || []).some(t => t === "圣诞" || t === "跨年");
+      const matchNewYear = !newYearOnly || (a.tags || []).some(t => NEW_YEAR_TAGS.includes(t));
 
       const isActive = (a.status || 'active') === 'active';
       const isHidden = (a.hidden_by || []).includes(currentUser);
       const expired = isExpired(a);
 
-      return matchSearch && matchCategory && matchTag && matchChristmas && isActive && !expired && !isHidden;
+      return matchSearch && matchCategory && matchTag && matchNewYear && isActive && !expired && !isHidden;
     });
-  }, [activities, searchTerm, activeCategory, currentUser, tagFilter, christmasOnly]);
+  }, [activities, searchTerm, activeCategory, currentUser, tagFilter, newYearOnly]);
 
   useEffect(() => {
-    if (isChristmas && !lastWasChristmasRef.current && !showChristmasGift) {
-      openChristmasGift();
+    if (isNewYear && !lastWasNewYearRef.current && !showNewYearWish) {
+      openNewYearWish();
     }
-    lastWasChristmasRef.current = isChristmas;
-  }, [isChristmas, showChristmasGift]);
+    lastWasNewYearRef.current = isNewYear;
+  }, [isNewYear, showNewYearWish]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) { 
@@ -376,7 +406,6 @@ const [tags, setTags] = useState<string[]>([]);
       title: "",
       description: "",
       category: CATEGORY_OPTIONS[0],
-      campus: "不限",
       location: "",
       min_people: "",
       max_people: "",
@@ -411,11 +440,14 @@ const [tags, setTags] = useState<string[]>([]);
     });
   };
 
-  const SECRET_DEADLINE_STR = "2025-12-28T23:59:59";
-  const deadlineTs = new Date(SECRET_DEADLINE_STR).getTime();
+  const SECRET_DEADLINE_STR = "2025-01-05T23:59:59";
+  const secretDeadline = new Date(SECRET_DEADLINE_STR);
+  const deadlineTs = secretDeadline.getTime();
   const nowTs = Date.now();
   const isSecretExpired = nowTs > deadlineTs;
   const daysLeft = Math.max(0, Math.ceil((deadlineTs - nowTs) / (24 * 60 * 60 * 1000)));
+  const secretDeadlineLabel = `${(secretDeadline.getMonth() + 1).toString().padStart(2, "0")}/${secretDeadline.getDate().toString().padStart(2, "0")} 截止`;
+  const secretDeadlineChip = `${secretDeadline.getMonth() + 1} 月 ${secretDeadline.getDate()} 日截止`;
 
   const SECRET_BADGES = [
     "🟦 链上萌新",
@@ -608,7 +640,6 @@ const [tags, setTags] = useState<string[]>([]);
     const location = (activityDraft.location || "").trim();
     const description = (activityDraft.description || "").trim();
     const category = activityDraft.category || "约饭";
-    const campus = activityDraft.campus || "不限";
     const { minVal, maxVal } = normalizePeople();
     const timeString = inputTimeStr.trim();
     const soulQuestion = (activityDraft.soul_question || "").trim();
@@ -621,6 +652,8 @@ const [tags, setTags] = useState<string[]>([]);
     if (minVal < 2) { alert("❌ 至少 2 人"); setCreateStep(1); return; }
     if (maxVal < minVal) { alert("❌ 人数设置错误"); setCreateStep(1); return; }
 
+    const isNewYearTopic = tags.some(t => NEW_YEAR_TAGS.includes(t));
+
     const newActivity = {
       title,
       description,
@@ -629,13 +662,12 @@ const [tags, setTags] = useState<string[]>([]);
       min_people: minVal,
       time: timeString,
       location,
-      campus,
       author: currentUser,
       requires_verification: !!activityDraft.requires_verification,
       requirements: reqDraft,
       soul_question: soulQuestion,
       tags,
-      topic: tags.includes("圣诞") ? "christmas" : "",
+      topic: isNewYearTopic ? "newyear" : "",
     };
 
     setIsLoading(true);
@@ -931,8 +963,8 @@ const [tags, setTags] = useState<string[]>([]);
               <Timer size={14} />
               {isSecretExpired ? "已截止" : `剩余 ${daysLeft} 天`}
             </div>
-            <div className="text-[10px] font-bold text-gray-300">
-              12/28 截止
+            <div className={`text-[10px] font-bold ${isSecretExpired ? "text-gray-300" : "text-gray-400"}`}>
+              {secretDeadlineLabel}
             </div>
           </div>
         </button>
@@ -964,7 +996,7 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             <div className={`mt-3 text-[11px] font-black ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
-              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : "⏳ 加入我们，在群里可以找到开发者给出你的创新建议～"}
+              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : `⏳ ${secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～`}
             </div>
           </div>
 
@@ -1016,8 +1048,8 @@ const [tags, setTags] = useState<string[]>([]);
   return (
     <div
       className={
-        isChristmas
-          ? "min-h-screen bg-[#0F3D2E] text-white font-sans pb-32"
+        isNewYear
+          ? "min-h-screen bg-gradient-to-b from-[#1A0F0F] via-[#120F26] to-[#0A0A14] text-white font-sans pb-32"
           : "min-h-screen bg-[#F4F8FF] text-[#0B1220] font-sans pb-32 transition-colors duration-500"
       }
     >
@@ -1085,24 +1117,24 @@ const [tags, setTags] = useState<string[]>([]);
       <main className="p-6 max-w-md mx-auto space-y-6">
         {activeTab === 'square' && (
           <div className="animate-fade-in space-y-6">
-            {/* ✅ Step1：圣诞展示牌（只在圣诞专题出现） */}
-            {isChristmas && (
+            {/* ✅ Step1：新年倒计时卡（专题时显示） */}
+            {isNewYear && (
               <div className="px-0">
-                <div className="rounded-3xl bg-gradient-to-r from-[#114B37] to-[#0F3D2E] border border-white/10 shadow-xl overflow-hidden">
+                <div className="rounded-3xl bg-gradient-to-r from-[#2B0F22] via-[#1C0F2E] to-[#0F0F24] border border-white/10 shadow-xl overflow-hidden">
                   <div className="px-6 py-5 flex items-center justify-between">
                     <div>
                       <div className="text-sm font-black tracking-wide text-[#F5C97B]">
-                        🎄 圣诞专题
+                        🧨 新年倒计时
                       </div>
-                      <div className="text-2xl font-black mt-1">搭子树</div>
+                      <div className="text-2xl font-black mt-1">距离 {newYearCountdown.targetYear} 年</div>
                       <div className="text-white/80 text-sm font-semibold mt-1">
-                        这棵树上，有你的位置
+                        还剩 {newYearCountdown.days} 天 {formatTwoDigits(newYearCountdown.hours)}:{formatTwoDigits(newYearCountdown.minutes)}:{formatTwoDigits(newYearCountdown.seconds)}
                       </div>
                     </div>
-                    <div className="text-3xl">🎁</div>
+                    <div className="text-3xl">🎆</div>
                   </div>
                   <div className="px-6 pb-5 text-white/70 text-xs font-bold">
-                    点一下礼物，收下你的圣诞小惊喜
+                    打开祝福，约上同频的搭子一起跨年
                   </div>
                 </div>
               </div>
@@ -1129,7 +1161,7 @@ const [tags, setTags] = useState<string[]>([]);
                     </div>
 
                     <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-black">
-                      ⏳ 限时开放：12 月 28 日截止
+                      ⏳ 限时开放：{secretDeadlineChip}
                     </div>
                   </div>
                 </div>
@@ -1146,23 +1178,23 @@ const [tags, setTags] = useState<string[]>([]);
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  setChristmasMode(true);
-                  setChristmasOnly(true);
+                  setNewYearMode(true);
+                  setNewYearOnly(true);
                   setActiveCategory("全部");
                   setTagFilter("");
-                  openChristmasGift();
+                  openNewYearWish();
                 }}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-red-500 font-black shadow"
               >
-                🎄 圣诞专题
+                🎆 新年倒计时
               </button>
-              {(tagFilter || christmasMode) && (
+              {(tagFilter || newYearMode) && (
                 <button
                   className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
                   onClick={() => {
                     setTagFilter("");
-                    setChristmasMode(false);
-                    setChristmasOnly(false);
+                    setNewYearMode(false);
+                    setNewYearOnly(false);
                   }}
                 >
                   清除专题
@@ -1175,8 +1207,8 @@ const [tags, setTags] = useState<string[]>([]);
               onChange={(cat) => {
                 setCategoryFilter(cat);
                 setTagFilter("");
-                setChristmasMode(false);
-                setChristmasOnly(false);
+                setNewYearMode(false);
+                setNewYearOnly(false);
               }}
             />
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
@@ -1391,29 +1423,29 @@ const [tags, setTags] = useState<string[]>([]);
         )}
       </main>
 
-      {/* ✅ Step3：礼物按钮（只在圣诞专题显示） */}
-      {isChristmas && activeTab === "square" && (
+      {/* ✅ 新年祝福按钮（仅专题显示） */}
+      {isNewYear && activeTab === "square" && (
         <button
-          onClick={openChristmasGift}
+          onClick={openNewYearWish}
           className="fixed bottom-6 right-6 z-[60] select-none"
-          aria-label="Christmas gift"
+          aria-label="New year wish"
         >
           <div
-            className="w-14 h-14 rounded-2xl bg-[#F5C97B] text-[#0F3D2E] shadow-2xl flex items-center justify-center text-2xl"
+            className="w-14 h-14 rounded-2xl bg-[#F5C97B] text-[#7A1D1D] shadow-2xl flex items-center justify-center text-2xl"
             style={{ animation: "giftWiggle 3s ease-in-out infinite" }}
           >
-            🎁
+            🧨
           </div>
         </button>
       )}
 
-      {/* ✅ 圣诞礼物弹窗 */}
-      {showChristmasGift && (
+      {/* ✅ 新年祝福弹窗 */}
+      {showNewYearWish && (
         <div
           className="fixed inset-0 z-[999] flex items-center justify-center"
           role="dialog"
           aria-modal="true"
-          onClick={closeChristmasGift}
+          onClick={closeNewYearWish}
         >
           {/* 背景遮罩 */}
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -1425,12 +1457,12 @@ const [tags, setTags] = useState<string[]>([]);
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-black text-gray-400">圣诞小惊喜</div>
-                <div className="text-2xl font-black mt-1">🎁 你的礼物</div>
+                <div className="text-sm font-black text-gray-400">新年祝福</div>
+                <div className="text-2xl font-black mt-1">🎆 新年好</div>
               </div>
 
               <button
-                onClick={closeChristmasGift}
+                onClick={closeNewYearWish}
                 className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-black"
                 aria-label="close"
               >
@@ -1439,18 +1471,18 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-gray-900 text-base font-bold leading-relaxed">
-              {giftText}
+              {wishText}
             </div>
 
             <div className="mt-5 flex gap-3">
               <button
-                onClick={closeChristmasGift}
+                onClick={closeNewYearWish}
                 className="flex-1 h-12 rounded-2xl bg-black text-white font-black"
               >
-                收下 🎄
+                收下 🎆
               </button>
               <button
-                onClick={nextChristmasGift}
+                onClick={nextNewYearWish}
                 className="flex-1 h-12 rounded-2xl bg-gray-100 text-gray-900 font-black"
               >
                 再来一个
@@ -1589,78 +1621,220 @@ const [tags, setTags] = useState<string[]>([]);
             </div>
 
             {createStep === 1 && (
-              <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* 1. 校区选择：实景感大卡片 */}
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">📍 你在哪儿开局？</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(["仙林", "鼓楼", "苏州", "浦口", "不限"] as CampusType[]).map((cp) => (
-                      <button
-                        key={cp}
-                        type="button"
-                        onClick={() => setActivityDraft(p => ({ ...p, campus: cp }))}
-                        className={`relative overflow-hidden p-5 rounded-[2rem] border-2 transition-all active:scale-95 ${
-                          activityDraft.campus === cp 
-                          ? "border-black bg-black text-white shadow-xl" 
-                          : "border-gray-100 bg-gray-50 text-gray-500"
-                        }`}
-                      >
-                        <div className="text-lg font-black">{cp}</div>
-                        <div className={`text-[10px] font-bold opacity-60 ${activityDraft.campus === cp ? "text-white" : "text-gray-400"}`}>
-                          {cp === "不限" ? "全校区可见" : "校区精准匹配"}
-                        </div>
-                        {/* 装饰性背景字母 */}
-                        <div className="absolute -right-2 -bottom-2 text-4xl font-black opacity-10 italic">
-                          {cp.charAt(0)}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+  <div className="flex flex-col gap-4">
 
-                {/* 2. 分类选择：Emoji 宫格卡片 */}
-                <div className="space-y-3">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">🎭 这局玩什么？</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {CATEGORY_OPTIONS.map((c) => {
-                      const icons: Record<string, string> = { "美食搭子": "🍱", "学习搭子": "📚", "运动健身": "🏃", "桌游搭子": "🃏" };
-                      return (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setActivityDraft(p => ({ ...p, category: c }))}
-                          className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                            activityDraft.category === c 
-                            ? "border-blue-500 bg-blue-50 text-blue-700" 
-                            : "border-gray-100 bg-white text-gray-400"
-                          }`}
-                        >
-                          <span className="text-2xl">{icons[c] || "✨"}</span>
-                          <span className="font-black text-sm">{c}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+    {/* 分类 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label>
+      <div className="grid grid-cols-2 gap-3">
+        {CATEGORY_OPTIONS.map((c) => (
+          <label key={c} className="flex-1 cursor-pointer">
+            <input
+              type="radio"
+              name="category"
+              value={c}
+              checked={activityDraft.category === c}
+              onChange={() => setActivityDraft(p => ({ ...p, category: c }))}
+              className="peer hidden"
+            />
+            <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold transition-all">
+              {c}
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
 
-                {/* 3. 基础信息：极简输入 */}
-                <div className="space-y-4">
-                  <div className="group">
-                    <label className="text-xs font-black text-gray-400 uppercase ml-1">给房间起个响亮的名字</label>
-                    <input
-                      value={activityDraft.title}
-                      onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
-                      className="w-full text-2xl font-black border-b-4 border-gray-100 py-3 outline-none focus:border-black transition-colors bg-transparent placeholder:text-gray-200"
-                      placeholder="例如：仙林火锅速来"
-                    />
-                  </div>
-                </div>
+    {/* 标题 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label>
+      <input
+        value={activityDraft.title}
+        onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
+        required
+        className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent"
+        placeholder="例如：周末火锅局"
+      />
+    </div>
 
-                <div className="text-[11px] font-bold text-gray-400 bg-gray-50 p-4 rounded-2xl border border-dashed">
-                  💡 <span className="text-gray-600">心理提示：</span> 选好校区和类型，能帮你过滤掉 **80%** 不匹配的尴尬。
-                </div>
-              </div>
-            )}
+    {/* 时间（你这个本来就是 state，保持不动） */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <select
+          value={dateState.year}
+          onChange={e => handleDateChange("year", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(2025, 2030).map(y => (
+            <option key={y} value={y}>{y} 年</option>
+          ))}
+        </select>
+        <select
+          value={dateState.month}
+          onChange={e => handleDateChange("month", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(1, 12).map(m => (
+            <option key={m} value={m}>{m} 月</option>
+          ))}
+        </select>
+        <select
+          value={dateState.day}
+          onChange={e => handleDateChange("day", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => (
+            <option key={d} value={d}>{d} 日</option>
+          ))}
+        </select>
+        <select
+          value={dateState.hour}
+          onChange={e => handleDateChange("hour", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(0, 23).map(h => (
+            <option key={h} value={h}>{h} 时</option>
+          ))}
+        </select>
+        <select
+          value={dateState.minute}
+          onChange={e => handleDateChange("minute", e.target.value)}
+          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+        >
+          {range(0, 59).map(mi => (
+            <option key={mi} value={mi}>{mi} 分</option>
+          ))}
+        </select>
+      </div>
+    </div>
+
+    {/* 地点 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label>
+      <input
+        value={activityDraft.location}
+        onChange={e => setActivityDraft(p => ({ ...p, location: e.target.value }))}
+        required
+        className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+      />
+    </div>
+
+    {/* 人数 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label>
+      <div className="flex gap-4 items-center">
+        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-bold">最少</span>
+          <input
+            type="number"
+            placeholder="2"
+            value={activityDraft.min_people}
+            onChange={e =>
+              setActivityDraft(p => ({ ...p, min_people: e.target.value }))
+            }
+            className="w-full bg-transparent font-bold outline-none text-center"
+          />
+        </div>
+
+        <span className="text-gray-300 font-bold">-</span>
+
+        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-bold">最多</span>
+          <input
+            type="number"
+            placeholder="5"
+            value={activityDraft.max_people}
+            onChange={e =>
+              setActivityDraft(p => ({ ...p, max_people: e.target.value }))
+            }
+            className="w-full bg-transparent font-bold outline-none text-center"
+          />
+        </div>
+      </div>
+    </div>
+
+    {/* 仅限认证 */}
+    <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700">
+          <ShieldCheck size={20}/>
+        </div>
+        <div>
+          <div className="font-bold text-sm text-purple-900">仅限认证校友</div>
+          <div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div>
+        </div>
+      </div>
+
+      <input
+        type="checkbox"
+        checked={activityDraft.requires_verification}
+        onChange={e =>
+          setActivityDraft(p => ({ ...p, requires_verification: e.target.checked }))
+        }
+      />
+    </div>
+
+    {/* 详情 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label>
+      <textarea
+        value={activityDraft.description}
+        onChange={e => setActivityDraft(p => ({ ...p, description: e.target.value }))}
+        placeholder="年级要求、口味偏好、具体流程..."
+        className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm"
+      />
+    </div>
+
+    {/* 标签 */}
+    <div className="space-y-2">
+      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标签</label>
+
+      <div className="flex gap-2">
+        <input
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
+          className="flex-1 bg-gray-50 rounded-2xl p-4 font-bold outline-none"
+          placeholder="输入标签，回车添加（最多6个）"
+        />
+        <button
+          type="button"
+          onClick={() => addTag(tagInput)}
+          className="px-4 rounded-2xl bg-black text-white font-bold"
+        >
+          添加
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {['新年','跨年','倒计时','演唱会'].map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => addTag(t)}
+            className="px-3 py-1 rounded-full bg-white border border-gray-200 text-sm font-bold"
+          >
+            #{t}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {tags.map(t => (
+          <span key={t} className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-black text-sm flex items-center gap-2">
+            #{t}
+            <button type="button" onClick={() => removeTag(t)} className="opacity-70 hover:opacity-100">×</button>
+          </span>
+        ))}
+      </div>
+    </div>
+
+    <div className="text-xs font-black text-gray-500 mt-1">
+      先把活动信息填清楚，下一步再设置“门槛与氛围”。
+    </div>
+  </div>
+      )}
 
 
             {createStep === 2 && (
