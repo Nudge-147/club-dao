@@ -989,14 +989,14 @@ const [tags, setTags] = useState<string[]>([]);
               <img
                 src={code4teamQR}
                 alt="区块链 + AI 大模型金科大赛社团群二维码"
-                className={`w-full max-w-[260px] rounded-xl transition ${
-                  isSecretExpired ? "opacity-40 grayscale" : "opacity-100"
-                }`}
+                className="w-full max-w-[260px] rounded-xl transition opacity-100"
               />
             </div>
 
-            <div className={`mt-3 text-[11px] font-black ${isSecretExpired ? "text-gray-300" : "text-red-500"}`}>
-              {isSecretExpired ? "本期入口已截止（后续将更新二维码）" : `⏳ ${secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～`}
+            <div className="mt-3 text-[11px] font-black text-red-500">
+              {isSecretExpired
+                ? "本期入口已截止，稍后会更新下一期二维码。"
+                : `当前为最新一期二维码，${secretDeadlineLabel} 前有效，加入我们，在群里可以找到开发者给出你的创新建议～`}
             </div>
           </div>
 
