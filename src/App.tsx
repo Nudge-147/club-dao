@@ -81,6 +81,8 @@ interface ChatMsg {
   sender: string;
   text: string;
   created_at: number;
+  msgType?: string;
+  payload?: any;
 }
 
 type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
@@ -773,6 +775,24 @@ const [tags, setTags] = useState<string[]>([]);
     setRoomOpen(true);
   };
 
+  const openGlobalSquare = () => {
+    const fakeActivity: Activity = {
+      _id: "global-square",
+      title: "🌍 聊天大广场",
+      description: "所有人都在这里，消息保留 24 小时。畅所欲言吧！",
+      max_people: 9999,
+      time: "24h Online",
+      location: "云端",
+      author: "System",
+      category: "大厅" as any,
+      joined_users: [],
+      status: "active",
+    };
+
+    setRoomActivity(fakeActivity);
+    setRoomOpen(true);
+  };
+
   const closeRoom = () => {
     setRoomOpen(false);
     setRoomActivity(null);
@@ -1382,6 +1402,23 @@ const [tags, setTags] = useState<string[]>([]);
             )}
 
             <div className="relative group"><Search className="absolute left-4 top-3.5 text-gray-400" size={20} /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="寻找下一场活动..." className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl font-bold outline-none shadow-sm" /></div>
+
+            <button 
+              onClick={openGlobalSquare}
+              className="w-full mb-4 mt-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-4 text-white shadow-lg active:scale-95 transition-transform flex items-center justify-between"
+            >
+              <div className="text-left">
+                <div className="font-black text-lg flex items-center gap-2">
+                  🌍 聊天大广场 <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">LIVE</span>
+                </div>
+                <div className="text-xs font-bold text-white/80 mt-1">
+                  全服热聊中，点击加入讨论...
+                </div>
+              </div>
+              <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <span className="text-xl">💬</span>
+              </div>
+            </button>
 
             {/* 社团官方公告 */}
             <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
@@ -2293,61 +2330,50 @@ function RoomModal({
   const [memberInfoMap, setMemberInfoMap] = useState<Record<string, UserData | null>>({});
   const [memberLoading, setMemberLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [lastTs, setLastTs] = useState(0);
   const [chatText, setChatText] = useState("");
+  const [lastTs, setLastTs] = useState(0);
   const [chatLoading, setChatLoading] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const msgEndRef = useRef<HTMLDivElement>(null);
   const isPollingRef = useRef(false);
   const timerRef = useRef<any>(null);
 
+  const isGlobalSquare = activity._id === "global-square";
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
   const title = activity.title || "未命名活动";
-  const canChat = !!activity && !!currentUser && (activity.author === currentUser || (activity.joined_users || []).includes(currentUser));
+  const canChat =
+    isGlobalSquare ||
+    (!!activity &&
+      !!currentUser &&
+      (activity.author === currentUser || joined.includes(currentUser)));
 
   const SEAT_COUNT = 8;
-
-  useEffect(() => {
-    if (showChat && msgEndRef.current) {
-      msgEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, showChat]);
+  const seatedUsers = (() => {
+    const list: string[] = [];
+    const pushUniq = (u: string) => { if (u && !list.includes(u)) list.push(u); };
+    pushUniq(activity.author);
+    (activity.joined_users || []).filter(u => u !== activity.author).forEach(pushUniq);
+    return list.slice(0, SEAT_COUNT);
+  })();
+  const seats: (string | null)[] = Array.from({ length: SEAT_COUNT }, (_, i) => seatedUsers[i] || null);
 
   useEffect(() => {
     setMessages([]);
     setLastTs(0);
   }, [activity._id]);
 
-  const seatedUsers = (() => {
-    const joined = activity.joined_users || [];
-    const list: string[] = [];
-    const pushUniq = (u: string) => { if (u && !list.includes(u)) list.push(u); };
-
-    // 房主永远 #1
-    pushUniq(activity.author);
-
-    // joined_users 里剔除房主后按原顺序入座
-    joined.filter(u => u !== activity.author).forEach(pushUniq);
-
-    return list.slice(0, SEAT_COUNT);
-  })();
-
-  const seats: (string | null)[] = Array.from({ length: SEAT_COUNT }, (_, i) => seatedUsers[i] || null);
-
+  // 加载成员信息（普通房间）
   useEffect(() => {
+    if (isGlobalSquare) return;
     const joined = activity.joined_users || [];
     if (!joined.length) return;
-
     let cancelled = false;
-
     (async () => {
       setMemberLoading(true);
       try {
         const need = joined.filter(u => !memberInfoMap[u]);
-
         if (!need.length) return;
-
         const results = await Promise.all(
           need.map(async (u) => {
             try {
@@ -2358,9 +2384,7 @@ function RoomModal({
             }
           })
         );
-
         if (cancelled) return;
-
         setMemberInfoMap(prev => {
           const next = { ...prev };
           for (const [u, data] of results) next[u] = data;
@@ -2370,17 +2394,15 @@ function RoomModal({
         if (!cancelled) setMemberLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity._id]);
+  }, [activity._id, isGlobalSquare]);
 
+  // 消息轮询
   useEffect(() => {
     if (!activity?._id || !currentUser) return;
-
     const fetchNewMessages = async () => {
       if (isPollingRef.current) return;
-
       isPollingRef.current = true;
       try {
         const res = await cloud.invoke("get-messages", {
@@ -2389,22 +2411,16 @@ function RoomModal({
           since: lastTs,
           limit: 100,
         });
-
         if (res?.ok && Array.isArray(res.data) && res.data.length > 0) {
           const newMsgs = res.data;
-
           setMessages((prev) => {
             const existingIds = new Set(prev.map(m => m._id));
             const validNew = newMsgs.filter((m: ChatMsg) => !existingIds.has(m._id));
             if (validNew.length === 0) return prev;
-
             return [...prev, ...validNew].sort((a, b) => a.created_at - b.created_at);
           });
-
           const newest = newMsgs[newMsgs.length - 1].created_at;
-          if (newest > lastTs) {
-            setLastTs(newest);
-          }
+          if (newest > lastTs) setLastTs(newest);
         }
       } catch (e) {
         console.error("Polling error", e);
@@ -2412,21 +2428,23 @@ function RoomModal({
         isPollingRef.current = false;
       }
     };
-
     fetchNewMessages();
-
     timerRef.current = setInterval(fetchNewMessages, 2000);
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [activity?._id, currentUser, lastTs]);
 
+  useEffect(() => {
+    if ((isGlobalSquare || showChat) && msgEndRef.current) {
+      msgEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, showChat, isGlobalSquare]);
+
   const openUserProfile = async (username: string) => {
     setProfileOpen(true);
     setProfileLoading(true);
     setProfileUser(null);
-
     try {
       const res = await cloud.invoke("user-ops", { type: "get-info", username });
       if (res) setProfileUser(res);
@@ -2440,8 +2458,6 @@ function RoomModal({
   const sendChat = async () => {
     const text = chatText.trim();
     if (!text) return;
-    if (!activity?._id) return;
-
     setChatText("");
     setChatLoading(true);
     try {
@@ -2450,355 +2466,390 @@ function RoomModal({
         username: currentUser,
         text,
       });
-
       if (!res?.ok) {
         alert(res?.msg || "发送失败");
         setChatText(text);
       }
+    } catch (e) {
+      alert("网络错误");
+      setChatText(text);
     } finally {
       setChatLoading(false);
     }
   };
 
+  // ==================================================================================
+  // 🔥 场景 A: 全服聊天大广场 (Full Screen Mode) -> 🏮 新春特别版
+  // ==================================================================================
+  if (isGlobalSquare) {
+    return (
+      <div className="fixed inset-0 z-[999] bg-gradient-to-b from-[#961A1A] via-[#7A1212] to-[#3D0606] flex flex-col animate-fade-in text-[#FFFBEB] font-sans">
+        <div className="bg-[#7A1212]/90 backdrop-blur-md px-4 py-3 shadow-lg border-b border-orange-900/30 flex items-center justify-between sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-red-600 flex items-center justify-center text-2xl shadow-md border border-orange-400/30">
+              🏮
+            </div>
+            <div>
+              <div className="font-black text-base text-orange-50">新春聊天大集市</div>
+              <div className="text-[10px] font-bold text-orange-300 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+                全服热聊中 · 消息保留24h
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 bg-red-950/40 border border-orange-900/20 rounded-full flex items-center justify-center text-orange-200/80 font-bold active:scale-90 transition-transform hover:bg-red-900/60"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-orange-900/50 scrollbar-track-transparent">
+          <div className="text-center py-4">
+            <span className="text-[10px] bg-red-950/40 border border-orange-900/20 text-orange-300/80 px-4 py-1.5 rounded-full font-bold">
+              🧨 过年好！请文明发言，共创和谐氛围
+            </span>
+          </div>
+
+          {messages.map((m, i) => {
+            const mine = m.sender === currentUser;
+
+            if (m.msgType === "share_activity" && m.payload) {
+              const act = m.payload;
+              return (
+                <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  {!mine && (
+                    <div className="w-8 h-8 rounded-full bg-red-950/50 border border-orange-900/30 text-orange-300 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0">
+                      {m.sender[0]}
+                    </div>
+                  )}
+                  <div className="bg-[#FFFBF0] p-3 rounded-2xl shadow-md border border-orange-200 max-w-[260px] text-gray-900">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded">活动召集</span>
+                      <span className="text-[10px] font-bold text-gray-500">by {m.sender}</span>
+                    </div>
+                    <div className="font-black text-sm mb-1">{act.title}</div>
+                    <div className="text-xs text-gray-600 font-bold mb-3 leading-relaxed">
+                      📅 {act.time}
+                      <br />
+                      📍 {act.location}
+                    </div>
+                    <button className="w-full py-2 bg-gradient-to-r from-orange-600 to-red-700 text-white text-xs font-black rounded-xl active:opacity-90 shadow-sm">
+                      去广场列表查看
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                {!mine && (
+                  <div
+                    onClick={() => openUserProfile(m.sender)}
+                    className="w-8 h-8 rounded-full bg-white/90 border border-red-100 text-red-800 shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                  >
+                    {m.sender[0]}
+                  </div>
+                )}
+                <div
+                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm border ${
+                    mine
+                      ? "bg-gradient-to-r from-orange-600 to-red-700 border-transparent text-orange-50 rounded-tr-none shadow-orange-900/20"
+                      : "bg-[#FFFBF0] text-red-950 border-red-50 rounded-tl-none"
+                  }`}
+                >
+                  {!mine && <div className="text-[10px] font-bold text-red-900/50 mb-0.5">{m.sender}</div>}
+                  <div className="text-[14px] font-medium leading-relaxed break-words whitespace-pre-wrap">
+                    {m.text}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={msgEndRef} className="h-4" />
+        </div>
+
+        <div className="bg-[#3D0606] px-4 py-3 border-t border-orange-900/30 pb-safe relative z-20">
+          <div className="flex gap-2 items-end">
+            <textarea
+              value={chatText}
+              onChange={(e) => setChatText(e.target.value)}
+              placeholder="说句吉祥话..."
+              rows={1}
+              className="flex-1 bg-red-950/40 border border-orange-900/20 rounded-2xl px-4 py-3 font-bold text-sm text-orange-50 placeholder-orange-300/40 outline-none resize-none min-h-[44px] max-h-[120px] focus:border-orange-500/50 transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChat();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={sendChat}
+              disabled={chatLoading || !chatText.trim()}
+              className="w-12 h-11 rounded-2xl bg-gradient-to-r from-orange-500 to-red-600 text-white flex items-center justify-center disabled:opacity-50 disabled:grayscale active:scale-95 transition-all shadow-md shadow-orange-900/20"
+            >
+              <SendIcon />
+            </button>
+          </div>
+        </div>
+
+        {profileOpen && (
+          <div
+            className="absolute inset-0 z-[1000] bg-black/60 backdrop-blur-md flex items-end justify-center"
+            onClick={() => setProfileOpen(false)}
+          >
+            <div
+              className="w-full bg-[#FFFBF0] rounded-t-[2rem] p-6 animate-slide-up text-gray-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-black text-red-950">@{profileUser?.username || "..."}</h3>
+                <button onClick={() => setProfileOpen(false)} className="p-2 bg-red-50 text-red-800 rounded-full">
+                  ✕
+                </button>
+              </div>
+              {profileLoading ? (
+                <p className="text-sm font-bold text-red-300">加载中...</p>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-red-900/80 font-bold">{profileUser?.profile?.intro || "暂无介绍"}</p>
+                  <div className="flex gap-2">
+                    <span className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-bold">
+                      {profileUser?.profile?.grade || "未知年级"}
+                    </span>
+                    <span className="px-3 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold">
+                      {profileUser?.profile?.mbti || "未知MBTI"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 普通房间
   return (
-    <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm">
-      <div className="absolute inset-x-0 top-0 bottom-0 bg-[#EAF2FF] flex flex-col">
+    <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm animate-fade-in">
+      <div className="absolute inset-x-0 top-0 bottom-0 bg-[#EAF2FF] flex flex-col sm:max-w-md sm:mx-auto animate-slide-up">
         <div className="flex items-center justify-between px-4 pt-4">
           <button
-            type="button"
             onClick={onClose}
             className="w-10 h-10 rounded-full bg-white/80 border border-white/60 flex items-center justify-center font-black text-gray-500 active:scale-95"
           >
             ✕
           </button>
-
           <div className="text-xs font-black text-gray-500 bg-white/70 px-3 py-2 rounded-full border border-white/60">
             {joined.length}/{activity.max_people}
           </div>
         </div>
 
-        <div className="px-4 mt-3">
+        <div className="px-4 mt-3 mb-4">
           <div className="bg-gradient-to-r from-[#2D5BFF] to-[#4CA6FF] text-white rounded-3xl px-5 py-4 shadow-lg border border-white/20 relative overflow-hidden">
-            <div className="text-[11px] font-black opacity-90">
-              房主：{host} ｜ {activity.category || "活动房间"}
-            </div>
-            <div className="text-2xl font-black mt-1 leading-tight">
-              {title}
-            </div>
-            <div className="text-[12px] font-bold opacity-90 mt-1">
-              {activity.description ? activity.description.slice(0, 20) : "一起出发吧！"}
-              {activity.description && activity.description.length > 20 ? "…" : ""}
-            </div>
-
-            <div className="absolute right-4 top-4 bg-white/20 rounded-2xl px-3 py-2 text-sm font-black">
-              ROOM
-            </div>
+            <div className="text-[11px] font-black opacity-90">房主：{host}</div>
+            <div className="text-2xl font-black mt-1 leading-tight">{title}</div>
+            <div className="text-[12px] font-bold opacity-90 mt-1 line-clamp-2">{activity.description || "暂无描述"}</div>
           </div>
         </div>
 
-        <div className="flex-1 px-4 mt-4 overflow-y-auto pb-24">
+        <div className="flex-1 px-4 overflow-y-auto pb-24">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-black text-gray-700">
-              房间座位（{seatedUsers.length}/{SEAT_COUNT}）
-            </div>
-
+            <div className="text-sm font-black text-gray-700">房间座位 ({seatedUsers.length}/{SEAT_COUNT})</div>
             {memberLoading && (
-              <div className="text-[11px] font-black text-gray-400">加载成员档案…</div>
+              <div className="text-[10px] font-bold text-gray-400 animate-pulse">
+                正在同步档案...
+              </div>
             )}
           </div>
-
-          {/* 顶部“显示牌” */}
-          <div className="bg-white/90 border border-white/60 rounded-[2rem] p-4 shadow-sm mb-4">
-            <div className="text-[10px] font-black text-gray-400">房主：{activity.author}</div>
-            <div className="text-xl font-black text-gray-900 mt-1">
-              {activity.title}
-            </div>
-            <div className="text-[12px] font-bold text-gray-500 mt-1">
-              {activity.description ? activity.description.slice(0, 28) + (activity.description.length > 28 ? "..." : "") : "没有人是一座孤岛～"}
-            </div>
-          </div>
-
-          {/* 座位区 */}
           <div className="grid grid-cols-2 gap-3">
             {seats.map((u, idx) => {
               const empty = !u;
               const info = u ? (memberInfoMap[u] || null) : null;
-
-              const mbti = info?.profile?.mbti || "未填";
-              const grade = info?.profile?.grade || "未填";
-              const avatarText = u ? (u.trim().slice(0, 1) || "+") : "+";
-
-              const isHost = u && u === activity.author;
-              const isMe = u && u === currentUser;
-
+              const isMe = u === currentUser;
               return (
                 <button
                   key={idx}
-                  type="button"
                   disabled={empty}
                   onClick={() => { if (u) openUserProfile(u); }}
-                  className={[
-                    "relative rounded-[2rem] p-4 text-left transition active:scale-[0.99]",
-                    empty
-                      ? "bg-white/40 border border-dashed border-gray-200 text-gray-300"
-                      : "bg-white/85 border border-white/60 shadow-sm animate-seat-in",
-                  ].join(" ")}
+                  className={`relative rounded-[2rem] p-4 text-left transition active:scale-[0.99] ${empty ? "bg-white/40 border border-dashed border-gray-200" : "bg-white/85 border border-white/60 shadow-sm"}`}
                 >
-                  {/* 角标：座位号 */}
-                  <div className="absolute top-3 right-3 text-[10px] font-black text-gray-300">
-                    #{idx + 1}
-                  </div>
-
-                  {/* 角标：房主/你 */}
-                  {!empty && (
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      {isHost && (
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-400 text-yellow-950">
-                          房主
-                        </span>
-                      )}
-                      {isMe && (
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-black text-white">
-                          你
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 头像块 */}
+                  <div className="absolute top-3 right-3 text-[10px] font-black text-gray-300">#{idx + 1}</div>
                   <div className="mt-6 flex items-center gap-3">
-                    <div
-                      className={[
-                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg",
-                        empty
-                          ? "bg-gray-100 text-gray-300"
-                          : isMe
-                          ? "bg-black text-white"
-                          : "bg-blue-100 text-blue-700",
-                      ].join(" ")}
-                    >
-                      {avatarText}
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm ${empty ? "bg-gray-100 text-gray-300" : isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"}`}>
+                      {u ? u[0] : "+"}
                     </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className={`font-black text-sm ${empty ? "text-gray-300" : "text-gray-900"} truncate`}>
-                        {empty ? "空座" : u}
-                      </div>
-                      <div className={`text-[11px] font-bold mt-1 ${empty ? "text-gray-300" : "text-gray-400"}`}>
-                        {empty ? "加入后你会坐在这里" : "点击查看档案"}
-                      </div>
+                    <div className="min-w-0">
+                      <div className={`font-black text-sm truncate w-20 ${empty ? "text-gray-300" : "text-gray-900"}`}>{u || "空座"}</div>
+                      {!empty && <div className="text-[10px] text-gray-400 font-bold">{info?.profile?.mbti || "MBTI"}</div>}
                     </div>
                   </div>
-
-                  {/* 标签：MBTI / 年级 */}
-                  {!empty && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                        MBTI · {mbti}
-                      </span>
-                      <span className="text-[10px] font-black px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                        年级 · {grade}
-                      </span>
-                    </div>
-                  )}
                 </button>
               );
             })}
           </div>
-
-          {/* 底部提示：社会认同 */}
-          <div className="mt-4 text-[11px] font-bold text-gray-400">
-            ✅ 这里可以看到“还有谁也在”，赶紧开始和TA们聊天商讨活动细节吧～
-          </div>
-
         </div>
 
-        <div className="fixed left-0 right-0 bottom-0 bg-white/85 backdrop-blur border-t border-white/60 px-4 py-3 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-700 font-black active:scale-95"
-          >
+        <div className="fixed left-0 right-0 bottom-0 bg-white/85 backdrop-blur border-t border-white/60 px-4 py-3 flex gap-3 sm:max-w-md sm:mx-auto">
+          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-gray-100 text-gray-700 font-black active:scale-95">
             返回
           </button>
           <button
-            type="button"
             onClick={() => { if (canChat) setShowChat(true); }}
             disabled={!canChat}
-            className={`flex-1 py-4 rounded-2xl font-black text-sm transition active:scale-95
-    ${canChat ? "bg-black text-white" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
+            className={`flex-1 py-4 rounded-2xl font-black text-sm transition active:scale-95 ${canChat ? "bg-black text-white" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
           >
-            聊天
+            {canChat ? "进入聊天" : "加入后可聊"}
           </button>
         </div>
-        {!canChat && (
-          <div className="text-[11px] font-bold text-gray-300 mt-2 px-4">
-            加入活动后才能聊天
+
+        {showChat && (
+          <div className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm flex items-end sm:max-w-md sm:mx-auto">
+            <div className="w-full bg-white rounded-t-[2.5rem] p-5 shadow-2xl max-h-[85vh] h-[85vh] flex flex-col animate-slide-up">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-black text-lg">房间聊天</div>
+                <button onClick={() => setShowChat(false)} className="w-9 h-9 rounded-full bg-gray-100 text-gray-500 font-black">
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {messages.length === 0 && <div className="text-center text-gray-300 text-xs font-bold mt-10">暂无消息</div>}
+                {messages.map((m, i) => (
+                  <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${m.sender === currentUser ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm font-bold ${m.sender === currentUser ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                <div ref={msgEndRef} />
+              </div>
+              <div className="pt-3 flex gap-2">
+                <input
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  className="flex-1 bg-gray-50 rounded-2xl px-4 font-bold text-sm outline-none"
+                  placeholder="说点什么..."
+                />
+                <button onClick={sendChat} className="px-5 py-3 rounded-2xl bg-black text-white font-black text-sm">
+                  发送
+                </button>
+              </div>
+            </div>
           </div>
         )}
-      </div>
-
-      {showChat && (
-        <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end">
-          <div className="w-full bg-white rounded-t-[2.5rem] p-5 shadow-2xl max-h-[75vh] flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-black text-base">房间聊天</div>
-              <button
-                type="button"
-                onClick={() => setShowChat(false)}
-                className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 font-black active:scale-95"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {messages.length === 0 ? (
-                <div className="text-center text-[12px] font-bold text-gray-300 py-10">
-                  先打个招呼吧 👋
-                </div>
-              ) : (
-                messages.map((m, i) => {
-                  const mine = m.sender === currentUser;
-                  return (
-                    <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${mine ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}>
-                        <div className={`text-[10px] font-black ${mine ? "text-white/70" : "text-gray-500"}`}>
-                          {mine ? "你" : m.sender}
-                        </div>
-                        <div className="text-[13px] font-bold whitespace-pre-wrap break-words">
-                          {m.text}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              
-              <div ref={msgEndRef} />
-            </div>
-
-            <div className="pt-3 flex gap-2">
-              <input
-                value={chatText}
-                onChange={(e) => setChatText(e.target.value)}
-                placeholder="说点什么…"
-                className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 font-bold text-sm outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    sendChat();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={sendChat}
-                disabled={chatLoading}
-                className="px-4 py-3 rounded-2xl bg-black text-white font-black text-sm active:scale-95 disabled:opacity-60"
-              >
-                发送
-              </button>
-            </div>
-
-            <div className="mt-2 text-[10px] font-bold text-gray-300">
-              仅加入本活动的成员可见/可发言
-            </div>
-          </div>
-        </div>
-      )}
-
-      {profileOpen && (
-        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end justify-center">
-          <div className="w-full max-w-md bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border border-white/60">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-black">个人档案</div>
-              <button
-                type="button"
-                onClick={() => setProfileOpen(false)}
-                className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 font-black active:scale-95"
-              >
-                ✕
-              </button>
-            </div>
-
-            {profileLoading && (
-              <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
-                正在加载…
-              </div>
-            )}
-
-            {!profileLoading && profileUser && (
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-3xl p-5 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xl font-black">{profileUser.username}</div>
-                    {profileUser.is_verified ? (
-                      <div className="px-2 py-1 rounded-lg bg-yellow-400 text-yellow-950 text-[10px] font-black">
-                        已认证
-                      </div>
-                    ) : (
-                      <div className="px-2 py-1 rounded-lg bg-gray-200 text-gray-600 text-[10px] font-black">
-                        未认证
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-2 text-sm font-bold text-gray-500 whitespace-pre-wrap">
-                    {profileUser.profile?.intro || "这个人还没写自我介绍…"}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
-                    <div className="text-[10px] font-black text-gray-400">性别</div>
-                    <div className="text-sm font-black mt-1">
-                      {profileUser.profile?.gender || "未填写"}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
-                    <div className="text-[10px] font-black text-gray-400">年级</div>
-                    <div className="text-sm font-black mt-1">
-                      {profileUser.profile?.grade || "未填写"}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
-                    <div className="text-[10px] font-black text-gray-400">来自城市</div>
-                    <div className="text-sm font-black mt-1">
-                      {profileUser.profile?.city || "未填写"}
-                    </div>
-                  </div>
-
-                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
-                    <div className="text-[10px] font-black text-gray-400">兴趣爱好</div>
-                    <div className="text-sm font-black mt-1">
-                      {profileUser.profile?.hobbies || "未填写"}
-                    </div>
-                  </div>
-                </div>
-
+        {profileOpen && (
+          <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end justify-center sm:max-w-md sm:mx-auto" onClick={() => setProfileOpen(false)}>
+            <div className="w-full bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border border-white/60" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-lg font-black">个人档案</div>
                 <button
                   type="button"
                   onClick={() => setProfileOpen(false)}
-                  className="w-full py-3 rounded-2xl bg-black text-white font-black active:scale-95"
+                  className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 font-black active:scale-95"
                 >
-                  返回房间
+                  ✕
                 </button>
               </div>
-            )}
 
-            {!profileLoading && !profileUser && (
-              <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
-                没拿到该用户档案（可能还没创建/网络问题）
-              </div>
-            )}
+              {profileLoading && (
+                <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
+                  正在加载…
+                </div>
+              )}
+
+              {!profileLoading && profileUser && (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-3xl p-5 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xl font-black">{profileUser.username}</div>
+                      {profileUser.is_verified ? (
+                        <div className="px-2 py-1 rounded-lg bg-yellow-400 text-yellow-950 text-[10px] font-black">
+                          已认证
+                        </div>
+                      ) : (
+                        <div className="px-2 py-1 rounded-lg bg-gray-200 text-gray-600 text-[10px] font-black">
+                          未认证
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2 text-sm font-bold text-gray-500 whitespace-pre-wrap">
+                      {profileUser.profile?.intro || "这个人还没写自我介绍…"}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                      <div className="text-[10px] font-black text-gray-400">性别</div>
+                      <div className="text-sm font-black mt-1">
+                        {profileUser.profile?.gender || "未填写"}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                      <div className="text-[10px] font-black text-gray-400">年级</div>
+                      <div className="text-sm font-black mt-1">
+                        {profileUser.profile?.grade || "未填写"}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                      <div className="text-[10px] font-black text-gray-400">来自城市</div>
+                      <div className="text-sm font-black mt-1">
+                        {profileUser.profile?.city || "未填写"}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                      <div className="text-[10px] font-black text-gray-400">兴趣爱好</div>
+                      <div className="text-sm font-black mt-1">
+                        {profileUser.profile?.hobbies || "未填写"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen(false)}
+                    className="w-full py-3 rounded-2xl bg-black text-white font-black active:scale-95"
+                  >
+                    返回房间
+                  </button>
+                </div>
+              )}
+
+              {!profileLoading && !profileUser && (
+                <div className="bg-gray-50 rounded-2xl p-4 text-sm font-bold text-gray-500">
+                  没拿到该用户档案（可能还没创建/网络问题）
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
+
+const SendIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="22" y1="2" x2="11" y2="13"></line>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+  </svg>
+);
 
 export default App;
