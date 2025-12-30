@@ -1,7 +1,10 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users } from "lucide-react";
+
+// ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
+const ADMIN_USERS = ["ding", "chen"];
 
 // ===== New Year helpers =====
 
@@ -130,9 +133,243 @@ const THEMES = {
 type ThemeKey = keyof typeof THEMES;
 const CATEGORY_OPTIONS: CategoryType[] = ["美食搭子", "学习搭子", "运动健身", "桌游搭子", "逛街散步", "游戏搭子", "旅行搭子", "文艺演出"];
 
+// ===== Admin 组件 =====
+const AdminView = ({
+  currentUser,
+  cloud,
+  onClose,
+}: {
+  currentUser: string;
+  cloud: Cloud;
+  onClose: () => void;
+}) => {
+  const [viewState, setViewState] = useState<"list" | "detail">("list");
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [targetUser, setTargetUser] = useState(""); // 用于手动输入的用户名
+
+  // 加载列表
+  const loadList = async () => {
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("admin-ops", {
+        type: "admin-list-activities",
+        username: currentUser,
+      });
+      if (res.ok) setActivities(res.data);
+      else alert(res.msg);
+    } catch (e) {
+      alert("加载失败");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 加载单个详情
+  const loadDetail = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const res = await cloud.invoke("admin-ops", {
+        type: "admin-get-activity",
+        username: currentUser,
+        activityId: id,
+      });
+      if (res.ok) {
+        setCurrentActivity(res.data);
+        setViewState("detail");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 添加成员
+  const handleAddMember = async () => {
+    if (!currentActivity || !targetUser) return;
+    try {
+      const res = await cloud.invoke("admin-ops", {
+        type: "admin-add-member",
+        username: currentUser,
+        activityId: currentActivity._id,
+        targetUsername: targetUser,
+      });
+      if (res.ok) {
+        alert("添加成功");
+        setTargetUser("");
+        loadDetail(currentActivity._id); // 刷新
+      } else {
+        alert(res.msg);
+      }
+    } catch (e) {
+      alert("操作失败");
+    }
+  };
+
+  // 踢出成员
+  const handleKickMember = async (target: string) => {
+    if (!window.confirm(`确定要把 ${target} 踢出活动吗？`)) return;
+    if (!currentActivity) return;
+    try {
+      const res = await cloud.invoke("admin-ops", {
+        type: "admin-kick-member",
+        username: currentUser,
+        activityId: currentActivity._id,
+        targetUsername: target,
+      });
+      if (res.ok) {
+        loadDetail(currentActivity._id); // 刷新
+      } else {
+        alert(res.msg);
+      }
+    } catch (e) {
+      alert("操作失败");
+    }
+  };
+
+  useEffect(() => {
+    loadList();
+  }, []);
+
+  return (
+    <div className="pt-2 pb-24">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-black flex items-center gap-2">
+          <ShieldAlert className="text-red-600" /> 管理控制台
+        </h2>
+        <div className="flex items-center gap-2">
+          {viewState === "detail" && (
+            <button
+              onClick={() => setViewState("list")}
+              className="px-4 py-2 bg-gray-200 rounded-xl font-bold text-xs"
+            >
+              返回列表
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-black text-white rounded-xl font-bold text-xs"
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+
+      {isLoading && <div className="text-center py-4 text-gray-400 font-bold">加载中...</div>}
+
+      {/* 列表视图 */}
+      {viewState === "list" && (
+        <div className="space-y-4">
+          {activities.map((act) => (
+            <div
+              key={act._id}
+              className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-2"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-bold text-lg">{act.title}</div>
+                  <div className="text-xs text-gray-400 font-bold">ID: {act._id}</div>
+                </div>
+                <div
+                  className={`px-2 py-1 rounded text-xs font-black ${
+                    act.status === "active"
+                      ? "bg-green-100 text-green-600"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {act.status || "active"}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-end mt-2">
+                <div className="text-xs text-gray-500 font-bold space-y-1">
+                  <div>房主: {act.author}</div>
+                  <div>时间: {act.time}</div>
+                  <div>人数: {(act.joined_users || []).length} / {act.max_people}</div>
+                </div>
+                <button
+                  onClick={() => loadDetail(act._id)}
+                  className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold active:scale-95"
+                >
+                  管理成员
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 详情视图 */}
+      {viewState === "detail" && currentActivity && (
+        <div className="space-y-6">
+          <div className="bg-white p-4 rounded-2xl border border-gray-200">
+            <h3 className="font-black text-lg mb-2">{currentActivity.title}</h3>
+            <div className="text-xs text-gray-400 font-bold">ID: {currentActivity._id}</div>
+          </div>
+
+          {/* 添加成员区域 */}
+          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+            <h4 className="font-bold text-sm text-blue-800 mb-3 flex items-center gap-2">
+              <Users size={16} /> 手动添加成员
+            </h4>
+            <div className="flex gap-2">
+              <input
+                value={targetUser}
+                onChange={(e) => setTargetUser(e.target.value)}
+                placeholder="输入用户名"
+                className="flex-1 p-3 rounded-xl border-none outline-none font-bold text-sm"
+              />
+              <button
+                onClick={handleAddMember}
+                className="px-4 bg-blue-600 text-white rounded-xl font-bold text-sm"
+              >
+                加入
+              </button>
+            </div>
+          </div>
+
+          {/* 成员列表 */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-sm text-gray-500 pl-1">
+              成员列表 ({currentActivity.joined_users?.length})
+            </h4>
+            {currentActivity.joined_users?.map((u, idx) => (
+              <div
+                key={idx}
+                className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-xs text-gray-500">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm">{u}</div>
+                    {u === currentActivity.author && (
+                      <div className="text-[10px] text-orange-500 font-black">房主</div>
+                    )}
+                  </div>
+                </div>
+
+                {u !== currentActivity.author && (
+                  <button
+                    onClick={() => handleKickMember(u)}
+                    className="p-2 bg-red-50 text-red-500 rounded-lg active:scale-95"
+                  >
+                    <UserMinus size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [activeTab, setActiveTab] = useState<"square" | "my_activities" | "profile">("square");
+  const [activeTab, setActiveTab] = useState<"square" | "my_activities" | "profile" | "admin">("square");
   const [activitySubTab, setActivitySubTab] = useState<"ongoing" | "history">("ongoing");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -173,6 +410,7 @@ const [tags, setTags] = useState<string[]>([]);
 
   const [currentUser, setCurrentUser] = useState<string>("");
   const [userData, setUserData] = useState<UserData | null>(null);
+  const isAdminUser = ADMIN_USERS.includes(currentUser);
 
   const [verifyEmail, setVerifyEmail] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
@@ -196,6 +434,12 @@ const [tags, setTags] = useState<string[]>([]);
     const saved = localStorage.getItem(`club_secret_badge_${currentUser}`) || "";
     setSecretBadge(saved);
   }, [currentUser]);
+
+  useEffect(() => {
+    if (activeTab === "admin" && !isAdminUser) {
+      setActiveTab("square");
+    }
+  }, [activeTab, isAdminUser]);
 
   const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
   const handleDateChange = (key: keyof typeof dateState, val: string) => {
@@ -1062,6 +1306,8 @@ const [tags, setTags] = useState<string[]>([]);
                   ? "ClubDAO"
                   : activeTab === "my_activities"
                   ? "我的局"
+                  : activeTab === "admin"
+                  ? "管理"
                   : "我的"}
               </span>
 
@@ -1238,6 +1484,12 @@ const [tags, setTags] = useState<string[]>([]);
           </div>
         )}
         
+        {activeTab === "admin" && isAdminUser && (
+          <div className="animate-fade-in space-y-6">
+            <AdminView currentUser={currentUser} cloud={cloud} onClose={() => setActiveTab("square")} />
+          </div>
+        )}
+
         {activeTab === 'profile' && (
           <div className="animate-fade-in space-y-6">
             {/* 头部卡片 */}
@@ -1479,6 +1731,15 @@ const [tags, setTags] = useState<string[]>([]);
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button>
         <button onClick={() => setActiveTab('my_activities')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'my_activities' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'my_activities' ? 3 : 2} /><span className="text-[10px] font-bold">我的局</span></button>
+        {ADMIN_USERS.includes(currentUser) && (
+          <button
+            onClick={() => setActiveTab("admin")}
+            className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === "admin" ? "text-red-600" : "text-gray-300"}`}
+          >
+            <ShieldAlert size={24} strokeWidth={activeTab === "admin" ? 3 : 2} />
+            <span className="text-[10px] font-bold">Admin</span>
+          </button>
+        )}
         <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'profile' ? theme.navActive : theme.navInactive}`}><User size={24} strokeWidth={activeTab === 'profile' ? 3 : 2} /><span className="text-[10px] font-bold">我的</span></button>
       </div>
 
