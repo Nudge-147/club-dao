@@ -66,6 +66,7 @@ interface UserProfile {
   hobbies?: string;
   intro?: string;
   mbti?: string;
+  wechat_id?: string;
 }
 
 interface UserData {
@@ -1795,6 +1796,24 @@ const [tags, setTags] = useState<string[]>([]);
                     </div>
                   )}
                 </div>
+
+                <div className="space-y-1">
+                   <label className="text-[10px] font-bold text-gray-400 uppercase">微信号 (WeChat)</label>
+                   {isEditingProfile ? (
+                     <input 
+                       value={tempProfile.wechat_id||""} 
+                       onChange={e=>setTempProfile({...tempProfile, wechat_id: e.target.value})} 
+                       className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none border border-transparent focus:border-green-500/30 focus:bg-white transition-all" 
+                       placeholder="填写微信号，方便搭子联系你"
+                     />
+                   ) : (
+                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl text-sm font-bold">
+                       <span>{userData?.profile?.wechat_id || "未填写"}</span>
+                       {userData?.profile?.wechat_id && <span className="text-[10px] text-green-600 bg-green-100 px-2 py-0.5 rounded">联系方式</span>}
+                     </div>
+                   )}
+                </div>
+
                 <div className="space-y-1">
                    <label className="text-[10px] font-bold text-gray-400 uppercase">来自城市</label>
                    {isEditingProfile ? (
@@ -2768,6 +2787,31 @@ function RoomModal({
                       {profileUser?.profile?.mbti || "未知MBTI"}
                     </span>
                   </div>
+                  <div className="pt-2 border-t border-red-100/60">
+                    <div className="text-[10px] font-bold text-red-700/70 uppercase mb-1">联系方式</div>
+                    <div className="flex items-center justify-between bg-white text-red-900 p-3 rounded-xl border border-red-100 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💬</span>
+                        <div>
+                          <div className="text-[10px] text-red-700 font-bold">WeChat ID</div>
+                          <div className="text-sm font-black select-text">
+                            {profileUser?.profile?.wechat_id || "未填写"}
+                          </div>
+                        </div>
+                      </div>
+                      {profileUser?.profile?.wechat_id && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(profileUser.profile?.wechat_id || "");
+                            alert("已复制微信号！");
+                          }}
+                          className="px-3 py-1.5 bg-red-50 text-red-700 text-xs font-bold rounded-lg shadow-sm active:scale-95"
+                        >
+                          复制
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2958,45 +3002,71 @@ function RoomModal({
                       )}
                     </div>
 
-                    <div className="mt-2 text-sm font-bold text-gray-500 whitespace-pre-wrap">
-                      {profileUser.profile?.intro || "这个人还没写自我介绍…"}
+                  <div className="mt-2 text-sm font-bold text-gray-500 whitespace-pre-wrap">
+                    {profileUser.profile?.intro || "这个人还没写自我介绍…"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                    <div className="text-[10px] font-black text-gray-400">性别</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.gender || "未填写"}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-2xl p-4 border border-gray-100">
-                      <div className="text-[10px] font-black text-gray-400">性别</div>
-                      <div className="text-sm font-black mt-1">
-                        {profileUser.profile?.gender || "未填写"}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-4 border border-gray-100">
-                      <div className="text-[10px] font-black text-gray-400">年级</div>
-                      <div className="text-sm font-black mt-1">
-                        {profileUser.profile?.grade || "未填写"}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
-                      <div className="text-[10px] font-black text-gray-400">来自城市</div>
-                      <div className="text-sm font-black mt-1">
-                        {profileUser.profile?.city || "未填写"}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
-                      <div className="text-[10px] font-black text-gray-400">兴趣爱好</div>
-                      <div className="text-sm font-black mt-1">
-                        {profileUser.profile?.hobbies || "未填写"}
-                      </div>
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100">
+                    <div className="text-[10px] font-black text-gray-400">年级</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.grade || "未填写"}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setProfileOpen(false)}
-                    className="w-full py-3 rounded-2xl bg-black text-white font-black active:scale-95"
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                    <div className="text-[10px] font-black text-gray-400">来自城市</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.city || "未填写"}
+                    </div>
+                  </div>
+
+                    <div className="bg-white rounded-2xl p-4 border border-gray-100 col-span-2">
+                    <div className="text-[10px] font-black text-gray-400">兴趣爱好</div>
+                    <div className="text-sm font-black mt-1">
+                      {profileUser.profile?.hobbies || "未填写"}
+                    </div>
+                  </div>
+                </div>
+
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">联系方式</div>
+                    <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl border border-green-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💬</span>
+                        <div>
+                          <div className="text-[10px] text-green-600 font-bold">WeChat ID</div>
+                          <div className="text-sm font-black text-green-800 select-text">
+                            {profileUser.profile?.wechat_id || "未填写"}
+                          </div>
+                        </div>
+                      </div>
+                      {profileUser?.profile?.wechat_id && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(profileUser.profile?.wechat_id || "");
+                            alert("已复制微信号！");
+                          }}
+                          className="px-3 py-1.5 bg-white text-green-700 text-xs font-bold rounded-lg shadow-sm active:scale-95"
+                        >
+                          复制
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(false)}
+                  className="w-full py-3 rounded-2xl bg-black text-white font-black active:scale-95"
                   >
                     返回房间
                   </button>
