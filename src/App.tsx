@@ -1,7 +1,7 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye } from "lucide-react";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
 const ADMIN_USERS = ["ding", "chen"];
@@ -110,6 +110,7 @@ interface Activity {
   };
   tags?: string[];
   topic?: string;
+  view_count?: number;
 }
 
 interface ActivityDraft {
@@ -285,6 +286,7 @@ const AdminView = ({
                 <div className="text-xs text-gray-500 font-bold space-y-1">
                   <div>房主: {act.author}</div>
                   <div>时间: {act.time}</div>
+                  <div>热度: {act.view_count || 0} 次浏览</div>
                   <div>人数: {(act.joined_users || []).length} / {act.max_people}</div>
                 </div>
                 <button
@@ -759,6 +761,14 @@ const [tags, setTags] = useState<string[]>([]);
 
   const openRoom = (a: Activity) => {
     console.log("[openRoom] set", a._id, a.title);
+
+    // Optimistically bump view count so list reflects latest.
+    setActivities(prev => prev.map(item => item._id === a._id ? { ...item, view_count: (item.view_count || 0) + 1 } : item));
+
+    cloud
+      .invoke("activity-ops", { type: "view", activityId: a._id })
+      .catch(console.error);
+
     setRoomActivity(a);
     setRoomOpen(true);
   };
@@ -1097,6 +1107,9 @@ const [tags, setTags] = useState<string[]>([]);
                 解散
               </button>
             )}
+            <span className={`text-xs font-bold px-2 py-1.5 rounded-full flex items-center gap-1 bg-gray-100 text-gray-500`}>
+              <Eye size={12} /> {activity.view_count || 0}
+            </span>
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
           </div>
         </div>
@@ -2280,10 +2293,13 @@ function RoomModal({
   const [memberInfoMap, setMemberInfoMap] = useState<Record<string, UserData | null>>({});
   const [memberLoading, setMemberLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [chatText, setChatText] = useState("");
   const [lastTs, setLastTs] = useState(0);
+  const [chatText, setChatText] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const msgEndRef = useRef<HTMLDivElement>(null);
+  const isPollingRef = useRef(false);
+  const timerRef = useRef<any>(null);
 
   const joined = activity.joined_users || [];
   const host = activity.author || "房主";
@@ -2291,6 +2307,17 @@ function RoomModal({
   const canChat = !!activity && !!currentUser && (activity.author === currentUser || (activity.joined_users || []).includes(currentUser));
 
   const SEAT_COUNT = 8;
+
+  useEffect(() => {
+    if (showChat && msgEndRef.current) {
+      msgEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, showChat]);
+
+  useEffect(() => {
+    setMessages([]);
+    setLastTs(0);
+  }, [activity._id]);
 
   const seatedUsers = (() => {
     const joined = activity.joined_users || [];
@@ -2349,11 +2376,12 @@ function RoomModal({
   }, [activity._id]);
 
   useEffect(() => {
-    let stop = false;
-    let timer: any = null;
+    if (!activity?._id || !currentUser) return;
 
-    const pull = async () => {
-      if (!activity?._id || !currentUser) return;
+    const fetchNewMessages = async () => {
+      if (isPollingRef.current) return;
+
+      isPollingRef.current = true;
       try {
         const res = await cloud.invoke("get-messages", {
           activityId: activity._id,
@@ -2361,28 +2389,38 @@ function RoomModal({
           since: lastTs,
           limit: 100,
         });
-        if (!stop && res?.ok && Array.isArray(res.data) && res.data.length) {
-          setMessages(prev => {
-            const exist = new Set(prev.map(m => `${m.sender}_${m.created_at}_${m.text}`));
-            const add = res.data.filter((m: ChatMsg) => !exist.has(`${m.sender}_${m.created_at}_${m.text}`));
-            return [...prev, ...add];
+
+        if (res?.ok && Array.isArray(res.data) && res.data.length > 0) {
+          const newMsgs = res.data;
+
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map(m => m._id));
+            const validNew = newMsgs.filter((m: ChatMsg) => !existingIds.has(m._id));
+            if (validNew.length === 0) return prev;
+
+            return [...prev, ...validNew].sort((a, b) => a.created_at - b.created_at);
           });
-          const newest = res.data[res.data.length - 1]?.created_at || lastTs;
-          setLastTs(Math.max(lastTs, newest));
+
+          const newest = newMsgs[newMsgs.length - 1].created_at;
+          if (newest > lastTs) {
+            setLastTs(newest);
+          }
         }
-      } catch {}
+      } catch (e) {
+        console.error("Polling error", e);
+      } finally {
+        isPollingRef.current = false;
+      }
     };
 
-    pull();
+    fetchNewMessages();
 
-    timer = setInterval(pull, 2000);
+    timerRef.current = setInterval(fetchNewMessages, 2000);
 
     return () => {
-      stop = true;
-      if (timer) clearInterval(timer);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity._id, currentUser, lastTs]);
+  }, [activity?._id, currentUser, lastTs]);
 
   const openUserProfile = async (username: string) => {
     setProfileOpen(true);
@@ -2404,6 +2442,7 @@ function RoomModal({
     if (!text) return;
     if (!activity?._id) return;
 
+    setChatText("");
     setChatLoading(true);
     try {
       const res = await cloud.invoke("send-message", {
@@ -2412,13 +2451,9 @@ function RoomModal({
         text,
       });
 
-      if (res?.ok) {
-        setChatText("");
-        const ts = res.created_at || Date.now();
-        setMessages(prev => [...prev, { activityId: activity._id, sender: currentUser, text, created_at: ts }]);
-        setLastTs(Math.max(lastTs, ts));
-      } else {
+      if (!res?.ok) {
         alert(res?.msg || "发送失败");
+        setChatText(text);
       }
     } finally {
       setChatLoading(false);
@@ -2639,6 +2674,8 @@ function RoomModal({
                   );
                 })
               )}
+              
+              <div ref={msgEndRef} />
             </div>
 
             <div className="pt-3 flex gap-2">
