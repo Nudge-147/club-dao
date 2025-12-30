@@ -1,7 +1,9 @@
 import code4teamQR from "./assets/code4team.jpg";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
+import html2canvas from "html2canvas";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X } from "lucide-react";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
 const ADMIN_USERS = ["ding", "chen"];
@@ -371,12 +373,81 @@ const AdminView = ({
   );
 };
 
+// 海报生成组件
+const PosterModal = ({ activity, onClose }: { activity: Activity; onClose: () => void }) => {
+  const posterRef = useRef<HTMLDivElement>(null);
+
+  const handleDownload = async () => {
+    if (!posterRef.current) return;
+    try {
+      const canvas = await html2canvas(posterRef.current, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: null,
+      });
+      const link = document.createElement("a");
+      link.download = `ClubDAO邀请函-${activity.title}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    } catch (e) {
+      alert("生成失败，请截图保存");
+    }
+  };
+
+  const shareUrl = `${window.location.origin}${window.location.pathname}?aid=${activity._id}`;
+
+  return (
+    <div className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="relative animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div ref={posterRef} className="w-[300px] bg-[#FFFBF0] rounded-[2rem] overflow-hidden shadow-2xl relative">
+          <div className="h-40 bg-gradient-to-br from-red-600 to-red-800 flex flex-col items-center justify-center text-orange-100 p-6 text-center relative overflow-hidden">
+            <div className="text-4xl mb-2">🏮</div>
+            <div className="text-xl font-black tracking-wider">新春搭子局</div>
+            <div className="absolute -bottom-6 -right-6 text-9xl opacity-10 rotate-12">福</div>
+          </div>
+
+          <div className="p-6 text-center space-y-4">
+            <h2 className="text-xl font-black text-gray-900 leading-tight">{activity.title}</h2>
+
+            <div className="text-xs text-gray-500 font-bold space-y-1 bg-orange-50 p-3 rounded-xl border border-orange-100">
+              <p>📅 {activity.time}</p>
+              <p>📍 {activity.location}</p>
+              <p>🔥 缺 {activity.max_people - (activity.joined_users?.length || 0)} 人</p>
+            </div>
+
+            <div className="flex justify-center my-2">
+              <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-100">
+                <QRCodeCanvas value={shareUrl} size={110} fgColor="#991B1B" />
+              </div>
+            </div>
+
+            <div className="text-[10px] text-gray-400 font-bold">长按扫码加入 · ClubDAO</div>
+          </div>
+        </div>
+
+        <div className="flex gap-4 mt-6 justify-center">
+          <button onClick={onClose} className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center active:scale-95 transition-transform">
+            <X />
+          </button>
+          <button
+            onClick={handleDownload}
+            className="h-12 px-6 rounded-full bg-white text-red-600 font-black flex items-center gap-2 shadow-xl active:scale-95 transition-transform"
+          >
+            <Download size={18} /> 保存图片
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activeTab, setActiveTab] = useState<"square" | "my_activities" | "profile" | "admin">("square");
   const [activitySubTab, setActivitySubTab] = useState<"ongoing" | "history">("ongoing");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [posterTarget, setPosterTarget] = useState<Activity | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"全部" | CategoryType>("全部");
@@ -528,6 +599,20 @@ const [tags, setTags] = useState<string[]>([]);
     const timer = setInterval(() => setNewYearCountdown(calcNewYearCountdown()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 监听 URL 参数（扫码进入）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const aid = params.get("aid");
+    if (aid && activities.length > 0) {
+      const target = activities.find((a) => a._id === aid);
+      if (target) {
+        setPendingJoin(target);
+        setShowJoinConfirm(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [activities]);
 
   const fetchActivities = async () => {
     try { const res = await cloud.invoke("get-activities"); if (res) setActivities(res); } catch (err) { console.error(err); }
@@ -852,6 +937,27 @@ const [tags, setTags] = useState<string[]>([]);
     }
   };
 
+  // 处理从广场跳转到具体活动
+  const handleSquareJump = (activityId: string) => {
+    const target = activities.find(a => a._id === activityId);
+    if (!target) {
+      alert("该活动可能已结束或被删除");
+      return;
+    }
+    const isMember = (target.joined_users || []).includes(currentUser) || target.author === currentUser;
+    if (isMember) {
+      setRoomActivity(target);
+      setRoomOpen(true);
+    } else {
+      setRoomOpen(false);
+      setRoomActivity(null);
+      setTimeout(() => {
+        setPendingJoin(target);
+        setShowJoinConfirm(true);
+      }, 50);
+    }
+  };
+
   const handleAckCancelled = async (activityId: string) => {
     setIsLoading(true);
     try {
@@ -998,7 +1104,7 @@ const [tags, setTags] = useState<string[]>([]);
     const isActive = st === 'active';
     const isHidden = (activity.hidden_by || []).includes(currentUser);
     const isGhost = isHidden;
-    const canFinish = joined.length >= minP;
+      const canFinish = joined.length >= minP;
 
     const actionButtons: React.ReactNode[] = [];
     actionButtons.push(
@@ -1158,9 +1264,18 @@ const [tags, setTags] = useState<string[]>([]);
         <div className="mb-4"><p onClick={() => setExpanded(!expanded)} className="text-gray-500 text-sm leading-relaxed whitespace-pre-wrap">{expanded ? activity.description : (activity.description||"").slice(0, 50) + "..."}</p></div>
         <div className="flex flex-col gap-3">
             <div className={`flex items-center gap-2 text-sm font-bold ${theme.icon}`}><Calendar size={14}/> {activity.time}</div>
-            <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-bold"><MapPin size={14}/> {activity.location}</div>
-                <div className="flex gap-2 flex-wrap justify-end">
+                <div className="flex gap-2 flex-wrap justify-end items-center">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPosterTarget(activity);
+                    }}
+                    className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100 active:scale-95 transition-transform"
+                  >
+                    <Share2 size={16} />
+                  </button>
                   {actionButtons}
                 </div>
             </div>
@@ -2308,8 +2423,10 @@ const [tags, setTags] = useState<string[]>([]);
       )}
 
       {roomOpen && roomActivity && (
-        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} />
+        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} onJump={handleSquareJump} />
       )}
+
+      {posterTarget && <PosterModal activity={posterTarget} onClose={() => setPosterTarget(null)} />}
 
     </div>
   );
@@ -2319,10 +2436,12 @@ function RoomModal({
   activity,
   currentUser,
   onClose,
+  onJump,
 }: {
   activity: Activity;
   currentUser: string;
   onClose: () => void;
+  onJump?: (id: string) => void;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -2478,6 +2597,27 @@ function RoomModal({
     }
   };
 
+  const handleShareToSquare = async () => {
+    if (!window.confirm("要把这个活动转发到【新春聊天大集市】吗？")) return;
+    try {
+      await cloud.invoke("send-message", {
+        activityId: "global-square",
+        username: currentUser,
+        msgType: "share_activity",
+        text: `[活动召集] ${activity.title}`,
+        payload: {
+          id: activity._id,
+          title: activity.title,
+          time: activity.time,
+          location: activity.location,
+        },
+      });
+      alert("🎉 已成功转发到大广场！");
+    } catch (e) {
+      alert("发送失败");
+    }
+  };
+
   // ==================================================================================
   // 🔥 场景 A: 全服聊天大广场 (Full Screen Mode) -> 🏮 新春特别版
   // ==================================================================================
@@ -2535,8 +2675,11 @@ function RoomModal({
                       <br />
                       📍 {act.location}
                     </div>
-                    <button className="w-full py-2 bg-gradient-to-r from-orange-600 to-red-700 text-white text-xs font-black rounded-xl active:opacity-90 shadow-sm">
-                      去广场列表查看
+                    <button
+                      onClick={() => onJump?.(act.id)}
+                      className="w-full py-2 bg-gradient-to-r from-orange-600 to-red-700 text-white text-xs font-black rounded-xl active:opacity-90 shadow-sm"
+                    >
+                      立即查看 / 加入 🚀
                     </button>
                   </div>
                 </div>
@@ -2645,8 +2788,16 @@ function RoomModal({
           >
             ✕
           </button>
-          <div className="text-xs font-black text-gray-500 bg-white/70 px-3 py-2 rounded-full border border-white/60">
-            {joined.length}/{activity.max_people}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShareToSquare}
+              className="h-8 px-3 rounded-full bg-orange-100 border border-orange-200 text-orange-600 text-[10px] font-black flex items-center gap-1 active:scale-95"
+            >
+              <Share2 size={12} /> 转发到广场
+            </button>
+            <div className="text-xs font-black text-gray-500 bg-white/70 px-3 py-2 rounded-full border border-white/60">
+              {joined.length}/{activity.max_people}
+            </div>
           </div>
         </div>
 
@@ -2717,15 +2868,44 @@ function RoomModal({
                   ✕
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 {messages.length === 0 && <div className="text-center text-gray-300 text-xs font-bold mt-10">暂无消息</div>}
-                {messages.map((m, i) => (
-                  <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${m.sender === currentUser ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm font-bold ${m.sender === currentUser ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}>
-                      {m.text}
+                {messages.map((m, i) => {
+                  const mine = m.sender === currentUser;
+
+                  if (m.msgType === "share_activity" && m.payload) {
+                    const act = m.payload;
+                    return (
+                      <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                        {!mine && <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-black mr-2 mt-1">{m.sender[0]}</div>}
+                        <div className="bg-white p-3 rounded-2xl shadow-sm border border-orange-100 max-w-[240px]">
+                          <div className="font-black text-sm text-gray-900 mb-1">{act.title}</div>
+                          <div className="text-xs text-gray-500 font-bold mb-2">📅 {act.time}</div>
+                          <button className="px-3 py-1 bg-gray-100 text-xs font-bold rounded-lg w-full">活动卡片</button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      {!mine && (
+                        <div
+                          onClick={() => openUserProfile(m.sender)}
+                          className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                        >
+                          {m.sender[0]}
+                        </div>
+                      )}
+                      <div>
+                        {!mine && <div className="text-[10px] text-gray-400 font-bold mb-1 ml-1">{m.sender}</div>}
+                        <div className={`max-w-[260px] rounded-2xl px-4 py-2.5 text-sm font-bold leading-relaxed break-words whitespace-pre-wrap shadow-sm ${mine ? "bg-black text-white rounded-tr-none" : "bg-gray-100 text-gray-800 rounded-tl-none"}`}>
+                          {m.text}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={msgEndRef} />
               </div>
               <div className="pt-3 flex gap-2">
