@@ -1,11 +1,11 @@
 import code4teamQR from "./assets/code4team.jpg";
 import groupQrImg from "./assets/team_code.jpg";
 import adminQrImg from "./assets/person_code.jpg";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight, Image as ImageIcon } from "lucide-react";
 import AnnouncementModal from "./components/AnnouncementModal";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
@@ -2739,6 +2739,7 @@ function RoomModal({
   const msgEndRef = useRef<HTMLDivElement>(null);
   const isPollingRef = useRef(false);
   const timerRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isGlobalSquare = activity._id === "global-square";
   const joined = activity.joined_users || [];
@@ -2923,6 +2924,38 @@ function RoomModal({
     }
   };
 
+  const handleSelectImage = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("图片太大了，请上传 2MB 以内的图片");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const base64Str = evt.target?.result as string;
+      if (!base64Str) return;
+      setChatLoading(true);
+      try {
+        const res = await cloud.invoke("send-message", {
+          activityId: activity._id,
+          username: currentUser,
+          msgType: "image",
+          text: base64Str,
+        });
+        if (!res?.ok) {
+          alert(res?.msg || "图片发送失败");
+        }
+      } catch (err) {
+        alert("网络错误");
+      } finally {
+        setChatLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // ==================================================================================
   // 🔥 场景 A: 全服聊天大广场 (Full Screen Mode) -> 🏮 新春特别版
   // ==================================================================================
@@ -2999,6 +3032,34 @@ function RoomModal({
               );
             }
 
+            if (m.msgType === "image") {
+              return (
+                <div
+                  key={`${m.sender}_${m.created_at}_${i}`}
+                  id={m._id ? `msg-${m._id}` : undefined}
+                  className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+                >
+                  {!mine && (
+                    <div
+                      className="w-8 h-8 rounded-full bg-white/90 border border-red-100 text-red-800 shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                      onClick={() => handleAvatarClick(m.sender)}
+                    >
+                      {m.sender[0]}
+                    </div>
+                  )}
+                  <div className={mine ? "ml-2" : "mr-2"}>
+                    {!mine && <div className="text-[10px] font-bold text-red-900/50 mb-0.5">{m.sender}</div>}
+                    <img
+                      src={m.text}
+                      alt="图片"
+                      className="max-w-[200px] max-h-[300px] rounded-2xl border-2 border-orange-200 shadow-md object-cover bg-black/20"
+                      onClick={() => window.open(m.text)}
+                    />
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={`${m.sender}_${m.created_at}_${i}`}
@@ -3032,7 +3093,20 @@ function RoomModal({
         </div>
 
         <div className="bg-[#3D0606] px-4 py-3 border-t border-orange-900/30 pb-safe relative z-20">
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleSelectImage}
+          />
           <div className="flex gap-2 items-end">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-11 h-11 rounded-2xl bg-red-950/60 border border-orange-900/30 text-orange-200 flex items-center justify-center active:scale-95"
+            >
+              <ImageIcon size={20} />
+            </button>
             <textarea
               value={chatText}
               onChange={(e) => setChatText(e.target.value)}
@@ -3234,6 +3308,34 @@ function RoomModal({
                     );
                   }
 
+                  if (m.msgType === "image") {
+                    return (
+                      <div
+                        key={i}
+                        id={m._id ? `msg-${m._id}` : undefined}
+                        className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+                      >
+                        {!mine && (
+                          <div
+                            onClick={() => handleAvatarClick(m.sender)}
+                            className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                          >
+                            {m.sender[0]}
+                          </div>
+                        )}
+                        <div>
+                          {!mine && <div className="text-[10px] text-gray-400 font-bold mb-1 ml-1">{m.sender}</div>}
+                          <img
+                            src={m.text}
+                            alt="图片"
+                            className="max-w-[180px] max-h-[240px] rounded-2xl border border-gray-200 shadow-sm object-cover bg-gray-50"
+                            onClick={() => window.open(m.text)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={i}
@@ -3260,6 +3362,19 @@ function RoomModal({
                 <div ref={msgEndRef} />
               </div>
               <div className="pt-3 flex gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleSelectImage}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-500 flex items-center justify-center active:scale-95"
+                >
+                  <ImageIcon size={20} />
+                </button>
                 <input
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
