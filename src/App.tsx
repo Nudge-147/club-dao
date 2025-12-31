@@ -1,9 +1,12 @@
 import code4teamQR from "./assets/code4team.jpg";
+import groupQrImg from "./assets/team_code.jpg";
+import adminQrImg from "./assets/person_code.jpg";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X } from "lucide-react";
+import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight } from "lucide-react";
+import AnnouncementModal from "./components/AnnouncementModal";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
 const ADMIN_USERS = ["ding", "chen"];
@@ -502,6 +505,7 @@ const [tags, setTags] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [readCursors, setReadCursors] = useState<Record<string, number>>({});
   const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
   const [targetMsgId, setTargetMsgId] = useState<string>("");
 
   useEffect(() => {
@@ -598,6 +602,86 @@ const [tags, setTags] = useState<string[]>([]);
     setWishSeed(seed);
     setWishText(pickWish(seed));
   };
+
+  // --- 新增组件：联系与共建弹窗 ---
+  const ContactModal = () => (
+    <div
+      className="fixed inset-0 z-[1002] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      onClick={() => setShowContactModal(false)}
+    >
+      <div
+        className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 顶部背景 */}
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 text-white relative overflow-hidden">
+          <div className="relative z-10">
+            <h3 className="text-2xl font-black mb-1">👋 嘿，朋友！</h3>
+            <p className="text-indigo-100 text-xs font-bold opacity-90">在这里，你的每一个建议都会被认真对待。</p>
+          </div>
+          <HeartHandshake className="absolute right-[-10px] bottom-[-20px] text-white opacity-10 w-32 h-32 rotate-12" />
+        </div>
+
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* 1. 社群板块 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-indigo-900 font-black">
+              <Users size={18} />
+              <span>加入交流群 / 社团咨询</span>
+            </div>
+            <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
+              <div className="text-xs text-indigo-600 font-bold mb-3">
+                不管是提Bug、聊产品、还是单纯想认识新朋友<br />
+                <span className="bg-indigo-100 px-1 rounded">没有门槛，来了就是自己人 🍻</span>
+              </div>
+
+              <div className="w-40 h-40 bg-white mx-auto rounded-xl p-2 shadow-sm border border-indigo-50 mb-3 flex items-center justify-center">
+                <img src={groupQrImg} alt="群二维码" className="w-full h-full object-cover rounded-lg" />
+              </div>
+
+              <div className="text-[10px] text-gray-400 font-bold">长按图片保存或扫码加入</div>
+            </div>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* 2. 个人/开发板块 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-gray-900 font-black">
+              <Code2 size={18} />
+              <span>联系开发者 / 一起搞事情</span>
+            </div>
+            <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 flex items-start gap-4">
+              <div className="w-16 h-16 bg-white rounded-xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
+                <img src={adminQrImg} alt="个人微信" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500 font-bold mb-2 leading-relaxed">
+                  我是开发者，如果你对代码感兴趣，或者想加入我们社团一起开发 ClubDAO，欢迎骚扰！
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText("2313526216");
+                    alert("微信号已复制，去微信添加吧~");
+                  }}
+                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-black text-gray-700 flex items-center gap-1 active:scale-95 shadow-sm"
+                >
+                  <Copy size={12} /> 点击复制微信号
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowContactModal(false)}
+          className="w-full py-4 bg-gray-50 text-gray-400 font-black text-sm hover:bg-gray-100 transition-colors"
+        >
+          关闭
+        </button>
+      </div>
+    </div>
+  );
 
   const lastWasNewYearRef = useRef(false);
   const formatTwoDigits = (n: number) => n.toString().padStart(2, "0");
@@ -1028,6 +1112,11 @@ const [tags, setTags] = useState<string[]>([]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const goToContact = () => {
+    setActiveTab("profile");
+    setTimeout(() => setShowContactModal(true), 120);
   };
 
   const sendCode = async () => {
@@ -1513,6 +1602,8 @@ const [tags, setTags] = useState<string[]>([]);
       }
     `}</style>
       {showLoginModal && (<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"><div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center"><h2 className="text-3xl font-black mb-8">ClubDAO</h2>{loginStep==="inputName"&&(<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>)}{loginStep==="nameTaken"&&(<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl text-sm font-bold">该代号已存在</div><button onClick={()=>setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold">是本人，去登录</button><button onClick={resetToInputName} className="w-full bg-white border p-4 rounded-xl font-bold">换个名字</button></div>)}{loginStep==="inputPassword"&&( <form onSubmit={handleLogin}><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>)}{loginStep==="createAccount"&&(<form onSubmit={handleRegister}><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设个密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册并登录</button></form>)}{loginError&&<p className="text-red-500 mt-4 font-bold">{loginError}</p>}</div></div>)}
+      {showContactModal && <ContactModal />}
+      <AnnouncementModal onAction={goToContact} />
       
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -1547,6 +1638,13 @@ const [tags, setTags] = useState<string[]>([]);
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={goToContact}
+            className="border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 transition hover:border-orange-400 hover:text-orange-500 hover:bg-orange-50 active:scale-95"
+          >
+            <span role="img" aria-label="idea">💡</span>
+            <span className="hidden sm:inline">我想提建议</span>
+          </button>
           <button
             onClick={() => setShowThemeModal(true)}
             className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center"
@@ -1805,6 +1903,35 @@ const [tags, setTags] = useState<string[]>([]);
 
             <AchievementCard />
             <SecretAchievementCard />
+
+            {/* 联系与共建入口卡片 */}
+            <div
+              onClick={() => setShowContactModal(true)}
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2rem] p-1 shadow-lg cursor-pointer active:scale-[0.98] transition-transform group"
+            >
+              <div className="bg-white rounded-[1.8rem] p-5 relative overflow-hidden">
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform duration-500">
+                      <Coffee size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <div className="font-black text-base text-gray-900 flex items-center gap-2">
+                        联系与共建
+                        <span className="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] rounded-full">New</span>
+                      </div>
+                      <div className="text-xs text-gray-500 font-bold mt-1">
+                        提建议、找Bug、或者单纯想加入我们？
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                    <ChevronRight size={18} />
+                  </div>
+                </div>
+                <div className="absolute right-[-20px] top-[-20px] w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full opacity-50 blur-xl group-hover:scale-150 transition-transform duration-700" />
+              </div>
+            </div>
 
             {/* 认证卡片 (仅当未认证时显示) */}
             {!userData?.is_verified && (
