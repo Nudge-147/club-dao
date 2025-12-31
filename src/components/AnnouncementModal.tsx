@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "./AnnouncementModal.css";
 
 const STORAGE_KEY = "club_announcement_v1";
