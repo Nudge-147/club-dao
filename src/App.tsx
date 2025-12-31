@@ -116,6 +116,7 @@ interface Activity {
   tags?: string[];
   topic?: string;
   view_count?: number;
+  msg_count?: number;
 }
 
 interface ActivityDraft {
@@ -498,6 +499,9 @@ const [tags, setTags] = useState<string[]>([]);
     const tmr = new Date(); tmr.setDate(tmr.getDate() + 1); 
     return { year: tmr.getFullYear(), month: tmr.getMonth() + 1, day: tmr.getDate(), hour: 0, minute: 0 };
   });
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [readCursors, setReadCursors] = useState<Record<string, number>>({});
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
 
   useEffect(() => {
     const { year, month, day, hour, minute } = dateState;
@@ -509,6 +513,24 @@ const [tags, setTags] = useState<string[]>([]);
     if (!currentUser) return;
     const saved = localStorage.getItem(`club_secret_badge_${currentUser}`) || "";
     setSecretBadge(saved);
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const sync = async () => {
+      try {
+        const res = await cloud.invoke("user-ops", { type: "sync-state", username: currentUser });
+        if (res?.ok) {
+          setNotifications(res.notifications || []);
+          setReadCursors(res.read_cursors || {});
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    sync();
+    const timer = setInterval(sync, 4000);
+    return () => clearInterval(timer);
   }, [currentUser]);
 
   useEffect(() => {
@@ -580,6 +602,13 @@ const [tags, setTags] = useState<string[]>([]);
 
   const theme = THEMES[currentTheme];
   const isNewYear = newYearMode;
+
+  const getUnreadCount = (act: Activity) => {
+    if (act._id === "global-square") return 0;
+    const total = act.msg_count || 0;
+    const read = readCursors[act._id] || 0;
+    return Math.max(0, total - read);
+  };
 
   useEffect(() => {
     const savedName = localStorage.getItem("club_username");
@@ -859,6 +888,15 @@ const [tags, setTags] = useState<string[]>([]);
 
     setRoomActivity(a);
     setRoomOpen(true);
+
+    if (currentUser && a._id !== "global-square") {
+      cloud.invoke("user-ops", {
+        type: "read-room",
+        username: currentUser,
+        activityId: a._id,
+      });
+      setReadCursors(prev => ({ ...prev, [a._id]: a.msg_count || 0 }));
+    }
   };
 
   const openGlobalSquare = () => {
@@ -1106,6 +1144,7 @@ const [tags, setTags] = useState<string[]>([]);
     const isHidden = (activity.hidden_by || []).includes(currentUser);
     const isGhost = isHidden;
       const canFinish = joined.length >= minP;
+    const unread = getUnreadCount(activity);
 
     const actionButtons: React.ReactNode[] = [];
     actionButtons.push(
@@ -1240,7 +1279,14 @@ const [tags, setTags] = useState<string[]>([]);
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 ${theme.badge}`}><User size={12} /> {joined.length}/{activity.max_people}</span>
           </div>
         </div>
-        <h3 className="font-bold text-xl mb-2">{activity.title}</h3>
+        <h3 className="font-bold text-xl mb-2 flex items-center gap-2">
+          {activity.title}
+          {unread > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </h3>
         {reqTags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {reqTags.slice(0, 6).map((t) => (
@@ -1915,6 +1961,20 @@ const [tags, setTags] = useState<string[]>([]);
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button>
         <button onClick={() => setActiveTab('my_activities')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'my_activities' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'my_activities' ? 3 : 2} /><span className="text-[10px] font-bold">我的局</span></button>
+        <button
+          onClick={() => setShowNotifyModal(true)}
+          className="flex flex-col items-center gap-1 w-16 relative transition-colors text-gray-400"
+        >
+          <div className="relative">
+            <div className="text-xl">🔔</div>
+            {notifications.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
+                {notifications.length > 99 ? "99+" : notifications.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-bold">通知</span>
+        </button>
         {ADMIN_USERS.includes(currentUser) && (
           <button
             onClick={() => setActiveTab("admin")}
@@ -2447,6 +2507,50 @@ const [tags, setTags] = useState<string[]>([]);
 
       {posterTarget && <PosterModal activity={posterTarget} onClose={() => setPosterTarget(null)} />}
 
+      {showNotifyModal && (
+        <div className="fixed inset-0 z-[1001] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowNotifyModal(false)}>
+          <div className="bg-white w-full rounded-t-[2rem] p-6 max-h-[70vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
+             <div className="flex justify-between items-center mb-6">
+               <h3 className="font-black text-xl">消息通知</h3>
+               <button onClick={() => {
+                  setShowNotifyModal(false);
+                  cloud.invoke("user-ops", { type: 'clear-notifies', username: currentUser });
+                  setNotifications([]);
+               }} className="text-xs font-bold text-gray-400">全部已读</button>
+             </div>
+             
+             {notifications.length === 0 ? (
+               <div className="text-center py-10 text-gray-300 font-bold">暂无新消息</div>
+             ) : (
+               <div className="space-y-4">
+                 {notifications.map((n: any) => (
+                   <div key={n._id || n.id || Math.random()} className="flex gap-3 items-start border-b border-gray-50 pb-3">
+                     <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black">
+                       {n.from_user?.[0] || "@"}
+                     </div>
+                     <div className="flex-1">
+                       <div className="text-sm font-bold">
+                         <span className="text-black">{n.from_user || "有人"}</span> 
+                         <span className="text-gray-400 mx-1">在活动里提到了你</span>
+                       </div>
+                       <div className="text-xs text-gray-400 mt-1">
+                          {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
+                       </div>
+                     </div>
+                     <button onClick={() => {
+                        setShowNotifyModal(false);
+                        handleSquareJump(n.activity_id);
+                     }} className="px-3 py-1 bg-black text-white text-xs font-bold rounded-lg">
+                       查看
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -2579,6 +2683,15 @@ function RoomModal({
     }
   }, [messages, showChat, isGlobalSquare]);
 
+  const handleAvatarClick = (targetUser: string) => {
+    if (targetUser === currentUser) {
+      openUserProfile(targetUser);
+      return;
+    }
+    const mention = `@${targetUser} `;
+    setChatText(prev => prev + mention);
+  };
+
   const openUserProfile = async (username: string) => {
     setProfileOpen(true);
     setProfileLoading(true);
@@ -2679,7 +2792,10 @@ function RoomModal({
               return (
                 <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   {!mine && (
-                    <div className="w-8 h-8 rounded-full bg-red-950/50 border border-orange-900/30 text-orange-300 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0">
+                    <div
+                      className="w-8 h-8 rounded-full bg-red-950/50 border border-orange-900/30 text-orange-300 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                      onClick={() => handleAvatarClick(m.sender)}
+                    >
                       {m.sender[0]}
                     </div>
                   )}
@@ -2709,7 +2825,7 @@ function RoomModal({
               <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 {!mine && (
                   <div
-                    onClick={() => openUserProfile(m.sender)}
+                    onClick={() => handleAvatarClick(m.sender)}
                     className="w-8 h-8 rounded-full bg-white/90 border border-red-100 text-red-800 shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
                   >
                     {m.sender[0]}
@@ -2935,7 +3051,7 @@ function RoomModal({
                     <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                       {!mine && (
                         <div
-                          onClick={() => openUserProfile(m.sender)}
+                          onClick={() => handleAvatarClick(m.sender)}
                           className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
                         >
                           {m.sender[0]}
