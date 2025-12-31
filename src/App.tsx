@@ -502,6 +502,7 @@ const [tags, setTags] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [readCursors, setReadCursors] = useState<Record<string, number>>({});
   const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [targetMsgId, setTargetMsgId] = useState<string>("");
 
   useEffect(() => {
     const { year, month, day, hour, minute } = dateState;
@@ -523,6 +524,17 @@ const [tags, setTags] = useState<string[]>([]);
         if (res?.ok) {
           setNotifications(res.notifications || []);
           setReadCursors(res.read_cursors || {});
+
+          // 如果后端返回了最新的 msg_counts，更新活动列表以触发红点
+          if (res.msg_counts) {
+            setActivities(prev => prev.map(act => {
+              const newCount = res.msg_counts[act._id];
+              if (newCount !== undefined && newCount !== act.msg_count) {
+                return { ...act, msg_count: newCount };
+              }
+              return act;
+            }));
+          }
         }
       } catch (e) {
         console.error(e);
@@ -976,8 +988,15 @@ const [tags, setTags] = useState<string[]>([]);
     }
   };
 
-  // 处理从广场跳转到具体活动
-  const handleSquareJump = (activityId: string) => {
+  // 处理从广场/通知跳转到具体活动
+  const handleSquareJump = (activityId: string, msgId?: string) => {
+    if (msgId) setTargetMsgId(msgId); else setTargetMsgId("");
+    // 如果是大广场，直接打开
+    if (activityId === "global-square") {
+      openGlobalSquare();
+      return;
+    }
+
     const target = activities.find(a => a._id === activityId);
     if (!target) {
       alert("该活动可能已结束或被删除");
@@ -1484,6 +1503,13 @@ const [tags, setTags] = useState<string[]>([]);
       @keyframes floatIn {
         0% { transform: translateY(10px) scale(0.98); opacity: 0; }
         100% { transform: translateY(0) scale(1); opacity: 1; }
+      }
+      @keyframes flash-highlight {
+        0% { background-color: #fde047; }
+        100% { background-color: transparent; }
+      }
+      .animate-flash {
+        animation: flash-highlight 2s ease-out forwards;
       }
     `}</style>
       {showLoginModal && (<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"><div className="bg-white rounded-[2rem] p-8 w-full max-w-sm text-center"><h2 className="text-3xl font-black mb-8">ClubDAO</h2>{loginStep==="inputName"&&(<form onSubmit={checkUsername}><input autoFocus value={loginName} onChange={e=>setLoginName(e.target.value)} placeholder="代号" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">下一步</button></form>)}{loginStep==="nameTaken"&&(<div className="space-y-4"><div className="bg-orange-50 text-orange-600 p-4 rounded-xl text-sm font-bold">该代号已存在</div><button onClick={()=>setLoginStep("inputPassword")} className="w-full bg-black text-white p-4 rounded-xl font-bold">是本人，去登录</button><button onClick={resetToInputName} className="w-full bg-white border p-4 rounded-xl font-bold">换个名字</button></div>)}{loginStep==="inputPassword"&&( <form onSubmit={handleLogin}><input autoFocus type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">登录</button></form>)}{loginStep==="createAccount"&&(<form onSubmit={handleRegister}><input autoFocus value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="设个密码" className="w-full p-4 bg-slate-100 rounded-xl mb-4 text-center font-bold"/><button className="w-full bg-black text-white p-4 rounded-xl font-bold">注册并登录</button></form>)}{loginError&&<p className="text-red-500 mt-4 font-bold">{loginError}</p>}</div></div>)}
@@ -2502,7 +2528,7 @@ const [tags, setTags] = useState<string[]>([]);
       )}
 
       {roomOpen && roomActivity && (
-        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} onJump={handleSquareJump} />
+        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} onJump={handleSquareJump} highlightMsgId={targetMsgId} />
       )}
 
       {posterTarget && <PosterModal activity={posterTarget} onClose={() => setPosterTarget(null)} />}
@@ -2530,16 +2556,21 @@ const [tags, setTags] = useState<string[]>([]);
                      </div>
                      <div className="flex-1">
                        <div className="text-sm font-bold">
-                         <span className="text-black">{n.from_user || "有人"}</span> 
-                         <span className="text-gray-400 mx-1">在活动里提到了你</span>
-                       </div>
-                       <div className="text-xs text-gray-400 mt-1">
-                          {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
-                       </div>
+                       <span className="text-black">{n.from_user || "有人"}</span> 
+                       <span className="text-gray-400 mx-1">在活动里提到了你</span>
+                      </div>
+                      <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded mt-1 line-clamp-2">
+                        "{n.text || '...'}"
+                      </div>
+                     <div className="text-xs text-gray-400 mt-1">
+                         {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
+                      </div>
                      </div>
-                     <button onClick={() => {
+                     <button onClick={async () => {
                         setShowNotifyModal(false);
-                        handleSquareJump(n.activity_id);
+                        setNotifications(prev => prev.filter(item => item._id !== n._id));
+                        cloud.invoke("user-ops", { type: 'mark-notify-read', username: currentUser, notifyId: n._id });
+                        handleSquareJump(n.activity_id, n.msg_id);
                      }} className="px-3 py-1 bg-black text-white text-xs font-bold rounded-lg">
                        查看
                      </button>
@@ -2560,11 +2591,13 @@ function RoomModal({
   currentUser,
   onClose,
   onJump,
+  highlightMsgId,
 }: {
   activity: Activity;
   currentUser: string;
   onClose: () => void;
-  onJump?: (id: string) => void;
+  onJump?: (id: string, msgId?: string) => void;
+  highlightMsgId?: string;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -2678,10 +2711,23 @@ function RoomModal({
   }, [activity?._id, currentUser, lastTs]);
 
   useEffect(() => {
-    if ((isGlobalSquare || showChat) && msgEndRef.current) {
+    if (!(isGlobalSquare || showChat)) return;
+    const highlightId = highlightMsgId ? `msg-${highlightMsgId}` : "";
+    if (highlightId) {
+      const el = document.getElementById(highlightId);
+      if (el) {
+        el.classList.remove("animate-flash");
+        // 强制 reflow 以便重新触发动画
+        void el.offsetWidth;
+        el.classList.add("animate-flash");
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+    }
+    if (msgEndRef.current) {
       msgEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, showChat, isGlobalSquare]);
+  }, [messages, showChat, isGlobalSquare, highlightMsgId]);
 
   const handleAvatarClick = (targetUser: string) => {
     if (targetUser === currentUser) {
@@ -2786,11 +2832,16 @@ function RoomModal({
 
           {messages.map((m, i) => {
             const mine = m.sender === currentUser;
+            const highlight = !!highlightMsgId && m._id === highlightMsgId;
 
             if (m.msgType === "share_activity" && m.payload) {
               const act = m.payload;
               return (
-                <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                <div
+                  key={i}
+                  id={m._id ? `msg-${m._id}` : undefined}
+                  className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+                >
                   {!mine && (
                     <div
                       className="w-8 h-8 rounded-full bg-red-950/50 border border-orange-900/30 text-orange-300 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
@@ -2822,7 +2873,11 @@ function RoomModal({
             }
 
             return (
-              <div key={`${m.sender}_${m.created_at}_${i}`} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div
+                key={`${m.sender}_${m.created_at}_${i}`}
+                id={m._id ? `msg-${m._id}` : undefined}
+                className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+              >
                 {!mine && (
                   <div
                     onClick={() => handleAvatarClick(m.sender)}
@@ -3032,11 +3087,16 @@ function RoomModal({
                 {messages.length === 0 && <div className="text-center text-gray-300 text-xs font-bold mt-10">暂无消息</div>}
                 {messages.map((m, i) => {
                   const mine = m.sender === currentUser;
+                  const highlight = !!highlightMsgId && m._id === highlightMsgId;
 
                   if (m.msgType === "share_activity" && m.payload) {
                     const act = m.payload;
                     return (
-                      <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <div
+                        key={i}
+                        id={m._id ? `msg-${m._id}` : undefined}
+                        className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+                      >
                         {!mine && <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-black mr-2 mt-1">{m.sender[0]}</div>}
                         <div className="bg-white p-3 rounded-2xl shadow-sm border border-orange-100 max-w-[240px]">
                           <div className="font-black text-sm text-gray-900 mb-1">{act.title}</div>
@@ -3048,7 +3108,11 @@ function RoomModal({
                   }
 
                   return (
-                    <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      key={i}
+                      id={m._id ? `msg-${m._id}` : undefined}
+                      className={`flex ${mine ? "justify-end" : "justify-start"} transition-colors duration-500 rounded-2xl ${highlight ? "animate-flash" : ""}`}
+                    >
                       {!mine && (
                         <div
                           onClick={() => handleAvatarClick(m.sender)}
