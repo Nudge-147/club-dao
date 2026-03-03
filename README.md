@@ -1,73 +1,89 @@
-# React + TypeScript + Vite
+# ClubDAO
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[中文文档](README.zh-CN.md)
 
-Currently, two official plugins are available:
+ClubDAO is a club activity and chat platform built with React + TypeScript + Vite.
+It supports activity publishing, joining, room-based chat, profile cards, notifications, and a lightweight admin panel.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- Username + password login/register flow
+- Activity square with search and category filtering
+- Create/join/quit/cancel/complete activities
+- Room view with visual seats and member profile preview
+- In-room chat and global square chat
+- Notification center and message jump
+- QR poster generation for activity sharing
+- Basic admin operations for activity management
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- React 19
+- TypeScript
+- Vite 7
+- Tailwind CSS
+- laf-client-sdk (cloud function calls)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Project Structure
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+src/
+  App.tsx                  # Main app logic and UI
+  main.tsx                 # App bootstrap
+  index.css                # Global styles and animations
+  components/
+    AnnouncementModal.tsx
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 1. Install dependencies
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
+
+### 2. Run dev server
+
+```bash
+npm run dev
+```
+
+### 3. Build for production
+
+```bash
+npm run build
+```
+
+### 4. Preview production build
+
+```bash
+npm run preview
+```
+
+## Backend Dependency
+
+The frontend invokes cloud functions through `laf-client-sdk` in `src/App.tsx`.
+Current `baseUrl` is configured directly in code:
+
+- `src/App.tsx`
+
+If you deploy your own backend, update that URL and related cloud function contracts.
+
+## Scripts
+
+- `npm run dev` start local development
+- `npm run build` type-check + production build
+- `npm run lint` run ESLint
+- `npm run preview` preview built assets
+
+## Known Limitations
+
+- Core business logic is still highly centralized in `src/App.tsx` (large file).
+- API contracts are currently inferred from runtime responses; stronger shared typing between frontend and backend is still pending.
+- The cloud `baseUrl` is still hardcoded in `src/App.tsx` and should be moved to env-driven config in a later refactor.
+
+## Notes
+
+- This repository currently focuses on product iteration speed.
+- `src/App.tsx` is intentionally centralized and can be modularized later.

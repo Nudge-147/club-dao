@@ -1,58 +1,15 @@
 import code4teamQR from "./assets/code4team.jpg";
 import groupQrImg from "./assets/team_code.jpg";
 import adminQrImg from "./assets/person_code.jpg";
-import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type ChangeEvent } from "react";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
-import { MapPin, Plus, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight, Image as ImageIcon } from "lucide-react";
+import { MapPin, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight, Image as ImageIcon } from "lucide-react";
 import AnnouncementModal from "./components/AnnouncementModal";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
 const ADMIN_USERS = ["ding", "chen"];
-
-// ===== New Year helpers =====
-
-const NEW_YEAR_WISHES = [
-  "把想做的事情写下来，新的一年都去试试。",
-  "倒计时走起，跨年约上想见的人吧。",
-  "愿你遇见同频的伙伴，也遇见闪光的自己。",
-  "这一年辛苦了，来年的愿望我们一起实现。",
-  "在倒计时里，给自己一个大胆的开始。",
-];
-
-const NEW_YEAR_TAGS = ["新年", "跨年", "倒计时"];
-
-type NewYearCountdown = {
-  targetYear: number;
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-};
-
-function pickWish(seed: number) {
-  const i = Math.abs(seed) % NEW_YEAR_WISHES.length;
-  return NEW_YEAR_WISHES[i];
-}
-
-function calcNewYearCountdown(): NewYearCountdown {
-  const now = new Date();
-  const targetYear = now.getFullYear() + 1;
-  const target = new Date(targetYear, 0, 1, 0, 0, 0);
-  const diff = Math.max(0, target.getTime() - Date.now());
-  const dayMs = 24 * 60 * 60 * 1000;
-  const hourMs = 60 * 60 * 1000;
-  const minuteMs = 60 * 1000;
-
-  return {
-    targetYear,
-    days: Math.floor(diff / dayMs),
-    hours: Math.floor((diff % dayMs) / hourMs),
-    minutes: Math.floor((diff % hourMs) / minuteMs),
-    seconds: Math.floor((diff % minuteMs) / 1000),
-  };
-}
 
 // --- 配置区域 ---
 const cloud = new Cloud({
@@ -88,7 +45,35 @@ interface ChatMsg {
   text: string;
   created_at: number;
   msgType?: string;
-  payload?: any;
+  payload?: unknown;
+}
+
+interface NotifyItem {
+  _id?: string;
+  id?: string;
+  from_user?: string;
+  text?: string;
+  created_at?: number;
+  activity_id?: string;
+  msg_id?: string;
+}
+
+type SharedActivityPayload = {
+  id: string;
+  title: string;
+  time: string;
+  location: string;
+};
+
+function isSharedActivityPayload(payload: unknown): payload is SharedActivityPayload {
+  if (!payload || typeof payload !== "object") return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.id === "string" &&
+    typeof p.title === "string" &&
+    typeof p.time === "string" &&
+    typeof p.location === "string"
+  );
 }
 
 type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
@@ -111,7 +96,7 @@ interface Activity {
   requires_verification?: boolean;
   requirements?: {
     gender: "any" | "female_only" | "male_only";
-    identity: "any" | "undergrad" | "graduate";
+    identity: "any" | "undergrad" | "graduate" | "PhD";
     stranger: "ok" | "new_friends" | "has_circle";
     vibe: string[];
     host_flags: string[];
@@ -160,7 +145,7 @@ const AdminView = ({
   const [targetUser, setTargetUser] = useState(""); // 用于手动输入的用户名
 
   // 加载列表
-  const loadList = async () => {
+  const loadList = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await cloud.invoke("admin-ops", {
@@ -169,12 +154,12 @@ const AdminView = ({
       });
       if (res.ok) setActivities(res.data);
       else alert(res.msg);
-    } catch (e) {
+    } catch {
       alert("加载失败");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [cloud, currentUser]);
 
   // 加载单个详情
   const loadDetail = async (id: string) => {
@@ -211,7 +196,7 @@ const AdminView = ({
       } else {
         alert(res.msg);
       }
-    } catch (e) {
+    } catch {
       alert("操作失败");
     }
   };
@@ -232,14 +217,14 @@ const AdminView = ({
       } else {
         alert(res.msg);
       }
-    } catch (e) {
+    } catch {
       alert("操作失败");
     }
   };
 
   useEffect(() => {
     loadList();
-  }, []);
+  }, [loadList]);
 
   return (
     <div className="pt-2 pb-24">
@@ -394,7 +379,7 @@ const PosterModal = ({ activity, onClose }: { activity: Activity; onClose: () =>
       link.download = `ClubDAO邀请函-${activity.title}.png`;
       link.href = canvas.toDataURL();
       link.click();
-    } catch (e) {
+    } catch {
       alert("生成失败，请截图保存");
     }
   };
@@ -478,7 +463,7 @@ function App() {
 
 const [reqDraft, setReqDraft] = useState({
   gender: "any" as "any" | "female_only" | "male_only",
-  identity: "any" as "any" | "undergrad" | "graduate",
+  identity: "any" as "any" | "undergrad" | "graduate" | "PhD",
   stranger: "ok" as "ok" | "new_friends" | "has_circle",
   vibe: [] as string[],
   host_flags: [] as string[],
@@ -502,7 +487,7 @@ const [tags, setTags] = useState<string[]>([]);
     const tmr = new Date(); tmr.setDate(tmr.getDate() + 1); 
     return { year: tmr.getFullYear(), month: tmr.getMonth() + 1, day: tmr.getDate(), hour: 0, minute: 0 };
   });
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotifyItem[]>([]);
   const [readCursors, setReadCursors] = useState<Record<string, number>>({});
   const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -576,32 +561,6 @@ const [tags, setTags] = useState<string[]>([]);
   const [loginPassword, setLoginPassword] = useState("");
   const [loginStep, setLoginStep] = useState<"inputName" | "nameTaken" | "inputPassword" | "createAccount">("inputName");
   const [loginError, setLoginError] = useState("");
-  const [newYearMode, setNewYearMode] = useState(false);
-  const [newYearOnly, setNewYearOnly] = useState(false);
-
-  // ===== 新年专题状态 =====
-  const [showNewYearWish, setShowNewYearWish] = useState(false);
-  const [wishText, setWishText] = useState("");
-  const [wishSeed, setWishSeed] = useState(0); // 用于“再来一个”刷新
-  const [newYearCountdown, setNewYearCountdown] = useState<NewYearCountdown>(() => calcNewYearCountdown());
-
-  // 打开新年祝福
-  const openNewYearWish = () => {
-    const seed = Date.now();
-    setWishSeed(seed);
-    setWishText(pickWish(seed));
-    setShowNewYearWish(true);
-  };
-
-  const closeNewYearWish = () => {
-    setShowNewYearWish(false);
-  };
-
-  const nextNewYearWish = () => {
-    const seed = wishSeed + 1;
-    setWishSeed(seed);
-    setWishText(pickWish(seed));
-  };
 
   // --- 新增组件：联系与共建弹窗 ---
   const ContactModal = () => (
@@ -683,10 +642,6 @@ const [tags, setTags] = useState<string[]>([]);
     </div>
   );
 
-  const lastWasNewYearRef = useRef(false);
-  const formatTwoDigits = (n: number) => n.toString().padStart(2, "0");
-
-
   // --- 隐藏成就：社群会员盲盒 ---
   const [showSecret, setShowSecret] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -697,7 +652,6 @@ const [tags, setTags] = useState<string[]>([]);
   const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
-  const isNewYear = newYearMode;
 
   const getUnreadCount = (act: Activity) => {
     if (act._id === "global-square") return 0;
@@ -719,11 +673,6 @@ const [tags, setTags] = useState<string[]>([]);
 
     const savedNeed = localStorage.getItem("club_need_pwd_change") === "1";
     setNeedPwdChange(savedNeed);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNewYearCountdown(calcNewYearCountdown()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   // 监听 URL 参数（扫码进入）
@@ -792,22 +741,14 @@ const [tags, setTags] = useState<string[]>([]);
       const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCategory = activeCategory === "全部" || a.category === activeCategory;
       const matchTag = !tagFilter || (a.tags || []).includes(tagFilter);
-      const matchNewYear = !newYearOnly || (a.tags || []).some(t => NEW_YEAR_TAGS.includes(t));
 
       const isActive = (a.status || 'active') === 'active';
       const isHidden = (a.hidden_by || []).includes(currentUser);
       const expired = isExpired(a);
 
-      return matchSearch && matchCategory && matchTag && matchNewYear && isActive && !expired && !isHidden;
+      return matchSearch && matchCategory && matchTag && isActive && !expired && !isHidden;
     });
-  }, [activities, searchTerm, activeCategory, currentUser, tagFilter, newYearOnly]);
-
-  useEffect(() => {
-    if (isNewYear && !lastWasNewYearRef.current && !showNewYearWish) {
-      openNewYearWish();
-    }
-    lastWasNewYearRef.current = isNewYear;
-  }, [isNewYear, showNewYearWish]);
+  }, [activities, searchTerm, activeCategory, currentUser, tagFilter]);
 
   const handleSetTheme = (theme: ThemeKey) => {
     if (theme === "nju" && userActivityCount < 10) { 
@@ -829,7 +770,7 @@ const [tags, setTags] = useState<string[]>([]);
   const MAX_TAG_TOTAL = 50;
 
   function addTag(raw: string) {
-    let t = (raw ?? "").trim().replace(/^#/, "");
+    const t = (raw ?? "").trim().replace(/^#/, "");
     if (!t) return;
     if (t.length > MAX_TAG_LEN) { alert("单个标签最多10字"); return; }
     if (tags.includes(t)) return;
@@ -965,7 +906,7 @@ const [tags, setTags] = useState<string[]>([]);
       } else {
         alert(res?.msg || "加入失败");
       }
-    } catch (e) {
+    } catch {
       alert("网络错误");
     } finally {
       setIsLoading(false);
@@ -1004,7 +945,7 @@ const [tags, setTags] = useState<string[]>([]);
       time: "24h Online",
       location: "云端",
       author: "System",
-      category: "大厅" as any,
+      category: "大厅",
       joined_users: [],
       status: "active",
     };
@@ -1024,7 +965,7 @@ const [tags, setTags] = useState<string[]>([]);
     try {
       const res = await cloud.invoke("quit-activity", { activityId, username: currentUser });
       if (res.ok) { alert("已退出"); fetchActivities(); } else { alert(res.msg); }
-    } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
+    } catch { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
   const handleCommonOp = async (opName: string, activityId: string, confirmMsg: string) => {
@@ -1034,7 +975,7 @@ const [tags, setTags] = useState<string[]>([]);
       const res = await cloud.invoke(opName, { activityId, username: currentUser });
       if (res.ok) { fetchActivities(); if(opName==='hide-activity') setActivities(prev=>prev.filter(a=>a._id!==activityId)); } 
       else alert(res.msg || "失败");
-    } catch (e) { alert("网络错误"); } finally { setIsLoading(false); }
+    } catch { alert("网络错误"); } finally { setIsLoading(false); }
   };
 
   const handleToggleRecruit = async (activityId: string) => {
@@ -1125,7 +1066,7 @@ const [tags, setTags] = useState<string[]>([]);
     try {
       const res = await cloud.invoke("verify-email", { type: 'send', email: verifyEmail, username: currentUser });
       if (res.ok) alert("验证码已发送，请查收邮件"); else alert(res.msg);
-    } catch(e) { alert("发送失败"); } finally { setIsSendingCode(false); }
+    } catch { alert("发送失败"); } finally { setIsSendingCode(false); }
   };
 
   const verifyCodeAction = async () => {
@@ -1139,7 +1080,7 @@ const [tags, setTags] = useState<string[]>([]);
       } else {
         alert(res.msg);
       }
-    } catch(e) { alert("验证失败"); }
+    } catch { alert("验证失败"); }
   };
 
   const saveProfile = async () => {
@@ -1147,7 +1088,7 @@ const [tags, setTags] = useState<string[]>([]);
     try {
       const res = await cloud.invoke("user-ops", { type: 'update-profile', username: currentUser, profile: tempProfile });
       if (res.ok) { alert("档案已保存"); setUserData(prev => prev ? {...prev, profile: tempProfile} : null); setIsEditingProfile(false); }
-    } catch(e) { alert("保存失败"); }
+    } catch { alert("保存失败"); }
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -1171,8 +1112,6 @@ const [tags, setTags] = useState<string[]>([]);
     if (minVal < 2) { alert("❌ 至少 2 人"); setCreateStep(1); return; }
     if (maxVal < minVal) { alert("❌ 人数设置错误"); setCreateStep(1); return; }
 
-    const isNewYearTopic = tags.some(t => NEW_YEAR_TAGS.includes(t));
-
     const newActivity = {
       title,
       description,
@@ -1186,13 +1125,13 @@ const [tags, setTags] = useState<string[]>([]);
       requirements: reqDraft,
       soul_question: soulQuestion,
       tags,
-      topic: isNewYearTopic ? "newyear" : "",
+      topic: "",
     };
 
     setIsLoading(true);
     try {
       console.log("[create] payload=", newActivity);
-      const res: any = await cloud.invoke("create-activity", newActivity);
+      const res = await cloud.invoke("create-activity", newActivity);
       console.log("[create] res=", res);
 
       if (res?.ok) {
@@ -1202,15 +1141,16 @@ const [tags, setTags] = useState<string[]>([]);
       } else {
         alert("发布失败：" + (res?.msg || "未知错误"));
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      alert("发布失败（invoke 异常）：" + (e?.message || JSON.stringify(e)));
+      const errMsg = e instanceof Error ? e.message : JSON.stringify(e);
+      alert("发布失败（invoke 异常）：" + errMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch(e){setLoginError("连接失败")}finally{setIsLoading(false);} };
+  const checkUsername = async (e: React.FormEvent) => { e.preventDefault(); if(!loginName.trim())return; setIsLoading(true); setLoginError(""); try{const res=await cloud.invoke("user-ops",{type:'check',username:loginName.trim()});if(res&&res.exists)setLoginStep("nameTaken");else setLoginStep("createAccount");}catch{setLoginError("连接失败")}finally{setIsLoading(false);} };
   const handleLogin = async (e: React.FormEvent) => { e.preventDefault(); setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'login',username:loginName.trim(),password:loginPassword});if(res&&res.ok){const need=!!res.need_pwd_change;setNeedPwdChange(need);localStorage.setItem("club_need_pwd_change",need?"1":"0");localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"密码错误");setIsLoading(false);} };
   const handleRegister = async (e: React.FormEvent) => { e.preventDefault(); if(loginPassword.length<5){setLoginError("密码至少 5 位");setIsLoading(false);return;} setIsLoading(true); const res=await cloud.invoke("user-ops",{type:'register',username:loginName.trim(),password:loginPassword});if(res&&res.ok){const need=!!res.need_pwd_change;setNeedPwdChange(need);localStorage.setItem("club_need_pwd_change",need?"1":"0");localStorage.setItem("club_username",loginName.trim());setCurrentUser(loginName.trim());fetchUserData(loginName.trim());setShowLoginModal(false);}else{setLoginError(res.msg||"注册失败");setIsLoading(false);} };
   const handleLogout = () => { localStorage.removeItem("club_username"); localStorage.removeItem("club_need_pwd_change"); setNeedPwdChange(false); setCurrentUser(""); setUserData(null); setVerifyEmail(""); setVerifyCode(""); setTempProfile({}); setIsEditingProfile(false); setShowLoginModal(true); setLoginStep("inputName"); setLoginName(""); setLoginPassword(""); };
@@ -1225,7 +1165,7 @@ const [tags, setTags] = useState<string[]>([]);
         {(["全部", ...CATEGORY_OPTIONS] as const).map(cat => (
           <button
             key={cat}
-            onClick={() => onChange(cat as any)}
+            onClick={() => onChange(cat)}
             className={`shrink-0 snap-start px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
               value === cat ? `${theme.primary} text-white shadow-md` : "bg-white text-gray-500 border border-gray-100"
             }`}
@@ -1576,19 +1516,9 @@ const [tags, setTags] = useState<string[]>([]);
 
   return (
     <div
-      className={
-        isNewYear
-          ? "min-h-screen bg-gradient-to-b from-[#1A0F0F] via-[#120F26] to-[#0A0A14] text-white font-sans pb-32"
-          : "min-h-screen bg-[#F4F8FF] text-[#0B1220] font-sans pb-32 transition-colors duration-500"
-      }
+      className="min-h-screen bg-[#F4F8FF] text-[#0B1220] font-sans pb-32 transition-colors duration-500"
     >
       <style>{`
-      @keyframes giftWiggle {
-        0%, 100% { transform: translateY(0) rotate(0deg); }
-        25% { transform: translateY(-2px) rotate(-2deg); }
-        50% { transform: translateY(0) rotate(2deg); }
-        75% { transform: translateY(-1px) rotate(-1deg); }
-      }
       @keyframes floatIn {
         0% { transform: translateY(10px) scale(0.98); opacity: 0; }
         100% { transform: translateY(0) scale(1); opacity: 1; }
@@ -1664,29 +1594,6 @@ const [tags, setTags] = useState<string[]>([]);
       <main className="p-6 max-w-md mx-auto space-y-6">
         {activeTab === 'square' && (
           <div className="animate-fade-in space-y-6">
-            {/* ✅ Step1：新年倒计时卡（专题时显示） */}
-            {isNewYear && (
-              <div className="px-0">
-                <div className="rounded-3xl bg-gradient-to-r from-[#2B0F22] via-[#1C0F2E] to-[#0F0F24] border border-white/10 shadow-xl overflow-hidden">
-                  <div className="px-6 py-5 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-black tracking-wide text-[#F5C97B]">
-                        🧨 新年倒计时
-                      </div>
-                      <div className="text-2xl font-black mt-1">距离 {newYearCountdown.targetYear} 年</div>
-                      <div className="text-white/80 text-sm font-semibold mt-1">
-                        还剩 {newYearCountdown.days} 天 {formatTwoDigits(newYearCountdown.hours)}:{formatTwoDigits(newYearCountdown.minutes)}:{formatTwoDigits(newYearCountdown.seconds)}
-                      </div>
-                    </div>
-                    <div className="text-3xl">🎆</div>
-                  </div>
-                  <div className="px-6 pb-5 text-white/70 text-xs font-bold">
-                    打开祝福，约上同频的搭子一起跨年
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="relative group"><Search className="absolute left-4 top-3.5 text-gray-400" size={20} /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="寻找下一场活动..." className="w-full bg-white pl-12 pr-4 py-3 rounded-2xl font-bold outline-none shadow-sm" /></div>
 
             <button 
@@ -1739,40 +1646,22 @@ const [tags, setTags] = useState<string[]>([]);
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setNewYearMode(true);
-                  setNewYearOnly(true);
-                  setActiveCategory("全部");
-                  setTagFilter("");
-                  openNewYearWish();
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-red-500 font-black shadow"
-              >
-                🎆 新年倒计时
-              </button>
-              {(tagFilter || newYearMode) && (
+            {tagFilter && (
+              <div className="flex items-center gap-2">
                 <button
                   className="px-3 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-bold"
-                  onClick={() => {
-                    setTagFilter("");
-                    setNewYearMode(false);
-                    setNewYearOnly(false);
-                  }}
+                  onClick={() => setTagFilter("")}
                 >
-                  清除专题
+                  清除标签筛选
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             <CategoryBar
               value={categoryFilter}
               onChange={(cat) => {
                 setCategoryFilter(cat);
                 setTagFilter("");
-                setNewYearMode(false);
-                setNewYearOnly(false);
               }}
             />
             <div>{squareList.length === 0 && !isLoading && <div className="text-center py-12 text-gray-300 font-bold">暂无活动</div>}{squareList.map(activity => <ActivityCard key={activity._id} activity={activity} showJoinBtn={true} />)}</div>
@@ -1962,7 +1851,7 @@ const [tags, setTags] = useState<string[]>([]);
                    <div className="space-y-1">
                      <label className="text-[10px] font-bold text-gray-400 uppercase">性别</label>
                      {isEditingProfile ? (
-                       <select value={tempProfile.gender||"保密"} onChange={e=>setTempProfile({...tempProfile, gender: e.target.value as any})} className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none"><option>男</option><option>女</option><option>保密</option></select>
+                       <select value={tempProfile.gender||"保密"} onChange={e=>setTempProfile({...tempProfile, gender: e.target.value as UserProfile["gender"]})} className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none"><option>男</option><option>女</option><option>保密</option></select>
                      ) : <div className="p-3 bg-gray-50 rounded-xl text-sm font-bold">{userData?.profile?.gender||"未填写"}</div>}
                    </div>
                    <div className="space-y-1">
@@ -2040,77 +1929,28 @@ const [tags, setTags] = useState<string[]>([]);
         )}
       </main>
 
-      {/* ✅ 新年祝福按钮（仅专题显示） */}
-      {isNewYear && activeTab === "square" && (
+      {/* 悬浮按钮与底部导航 */}
+      {activeTab === 'square' && (
         <button
-          onClick={openNewYearWish}
-          className="fixed bottom-6 right-6 z-[60] select-none"
-          aria-label="New year wish"
+          onClick={() => { resetCreateDraft(); setShowCreateModal(true); }}
+          className="fixed bottom-24 right-6 z-30 group active:scale-95 transition-all duration-300 shadow-[0_8px_30px_rgba(0,149,217,0.25)] hover:shadow-[0_8px_40px_rgba(255,76,0,0.3)] rounded-full"
         >
-          <div
-            className="w-14 h-14 rounded-2xl bg-[#F5C97B] text-[#7A1D1D] shadow-2xl flex items-center justify-center text-2xl"
-            style={{ animation: "giftWiggle 3s ease-in-out infinite" }}
-          >
-            🧨
+          <div className="relative overflow-hidden rounded-full p-[2px] flex items-center justify-center w-[88px] h-[44px]">
+            <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0%,rgba(0,149,217,0.2)_20%,#0095D9_40%,#FF4C00_60%,transparent_80%)]" />
+            <div className="relative z-10 w-full h-full rounded-full flex items-center justify-center gap-1 bg-white group-hover:bg-slate-50 transition-colors">
+              <span
+                className="font-black text-[15px] tracking-[0.15em] ml-1.5 text-slate-800"
+                style={{ fontFamily: 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif' }}
+              >
+                组局
+              </span>
+              <svg className="w-3.5 h-3.5 text-[#FF4C00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
           </div>
         </button>
       )}
-
-      {/* ✅ 新年祝福弹窗 */}
-      {showNewYearWish && (
-        <div
-          className="fixed inset-0 z-[999] flex items-center justify-center"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeNewYearWish}
-        >
-          {/* 背景遮罩 */}
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-
-          {/* 弹窗卡片 */}
-          <div
-            className="relative w-[92vw] max-w-md rounded-3xl bg-white shadow-2xl p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-black text-gray-400">新年祝福</div>
-                <div className="text-2xl font-black mt-1">🎆 新年好</div>
-              </div>
-
-              <button
-                onClick={closeNewYearWish}
-                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-black"
-                aria-label="close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-gray-900 text-base font-bold leading-relaxed">
-              {wishText}
-            </div>
-
-            <div className="mt-5 flex gap-3">
-              <button
-                onClick={closeNewYearWish}
-                className="flex-1 h-12 rounded-2xl bg-black text-white font-black"
-              >
-                收下 🎆
-              </button>
-              <button
-                onClick={nextNewYearWish}
-                className="flex-1 h-12 rounded-2xl bg-gray-100 text-gray-900 font-black"
-              >
-                再来一个
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 悬浮按钮与底部导航 */}
-      {activeTab === 'square' && (<button onClick={() => { resetCreateDraft(); setShowCreateModal(true); }} className={`fixed bottom-24 right-6 w-14 h-14 text-white rounded-[1.2rem] flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-90 z-30 ${theme.primary}`}><Plus size={28} /></button>)}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around items-center z-50 h-20">
         <button onClick={() => setActiveTab('square')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'square' ? theme.navActive : theme.navInactive}`}><Home size={24} strokeWidth={activeTab === 'square' ? 3 : 2} /><span className="text-[10px] font-bold">广场</span></button>
         <button onClick={() => setActiveTab('my_activities')} className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === 'my_activities' ? theme.navActive : theme.navInactive}`}><LayoutGrid size={24} strokeWidth={activeTab === 'my_activities' ? 3 : 2} /><span className="text-[10px] font-bold">我的局</span></button>
@@ -2448,7 +2288,7 @@ const [tags, setTags] = useState<string[]>([]);
       </div>
 
       <div className="flex flex-wrap gap-2 pt-1">
-        {['新年','跨年','倒计时','演唱会'].map(t => (
+        {["演唱会", "电影", "羽毛球", "桌游"].map(t => (
           <button
             key={t}
             type="button"
@@ -2502,13 +2342,13 @@ const [tags, setTags] = useState<string[]>([]);
                 <div>
                   <div className="text-xs font-black text-gray-500 mb-2">性别要求</div>
                   <div className="flex gap-2 flex-wrap">
-                    {[
+                    {([
                       { k: "any", t: "不限" },
                       { k: "female_only", t: "仅女生" },
                       { k: "male_only", t: "仅男生" },
-                    ].map(it => (
+                    ] as const).map(it => (
                       <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, gender: it.k as any }))}
+                        onClick={() => setReqDraft(p => ({ ...p, gender: it.k }))}
                         className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.gender === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
                       >
                         {it.t}
@@ -2520,14 +2360,14 @@ const [tags, setTags] = useState<string[]>([]);
                 <div>
                   <div className="text-xs font-black text-gray-500 mb-2">身份偏好</div>
                   <div className="flex gap-2 flex-wrap">
-                    {[
+                    {([
                       { k: "any", t: "不限" },
                       { k: "undergrad", t: "本科" },
                       { k: "graduate", t: "研究生" },
                       { k: "PhD", t: "博士" },
-                    ].map(it => (
+                    ] as const).map(it => (
                       <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, identity: it.k as any }))}
+                        onClick={() => setReqDraft(p => ({ ...p, identity: it.k }))}
                         className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.identity === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
                       >
                         {it.t}
@@ -2539,13 +2379,13 @@ const [tags, setTags] = useState<string[]>([]);
                 <div>
                   <div className="text-xs font-black text-gray-500 mb-2">对陌生人接受度</div>
                   <div className="flex gap-2 flex-wrap">
-                    {[
+                    {([
                       { k: "ok", t: "完全 OK" },
                       { k: "new_friends", t: "想认识新朋友" },
                       { k: "has_circle", t: "我有熟人圈但欢迎加入" },
-                    ].map(it => (
+                    ] as const).map(it => (
                       <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, stranger: it.k as any }))}
+                        onClick={() => setReqDraft(p => ({ ...p, stranger: it.k }))}
                         className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.stranger === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
                       >
                         {it.t}
@@ -2625,7 +2465,7 @@ const [tags, setTags] = useState<string[]>([]);
                 type="button"
                 onClick={() => {
                   if (createStep === 1) { resetCreateDraft(); setShowCreateModal(false); }
-                  else setCreateStep(s => (s - 1) as any);
+                  else setCreateStep(s => (s === 3 ? 2 : 1));
                 }}
                 className="flex-1 py-3 rounded-xl font-black text-sm bg-gray-100 text-gray-700 active:scale-95"
               >
@@ -2635,7 +2475,7 @@ const [tags, setTags] = useState<string[]>([]);
               {createStep < 3 ? (
                 <button
                   type="button"
-                  onClick={() => { normalizePeople(); setCreateStep(s => (s + 1) as any); }}
+                  onClick={() => { normalizePeople(); setCreateStep(s => (s === 1 ? 2 : 3)); }}
                   className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95"
                 >
                   下一步
@@ -2676,7 +2516,7 @@ const [tags, setTags] = useState<string[]>([]);
                <div className="text-center py-10 text-gray-300 font-bold">暂无新消息</div>
              ) : (
                <div className="space-y-4">
-                 {notifications.map((n: any) => (
+                 {notifications.map((n) => (
                    <div key={n._id || n.id || Math.random()} className="flex gap-3 items-start border-b border-gray-50 pb-3">
                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black">
                        {n.from_user?.[0] || "@"}
@@ -2697,7 +2537,7 @@ const [tags, setTags] = useState<string[]>([]);
                         setShowNotifyModal(false);
                         setNotifications(prev => prev.filter(item => item._id !== n._id));
                         cloud.invoke("user-ops", { type: 'mark-notify-read', username: currentUser, notifyId: n._id });
-                        handleSquareJump(n.activity_id, n.msg_id);
+                        if (n.activity_id) handleSquareJump(n.activity_id, n.msg_id);
                      }} className="px-3 py-1 bg-black text-white text-xs font-bold rounded-lg">
                        查看
                      </button>
@@ -2738,7 +2578,7 @@ function RoomModal({
   const [showChat, setShowChat] = useState(false);
   const msgEndRef = useRef<HTMLDivElement>(null);
   const isPollingRef = useRef(false);
-  const timerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isGlobalSquare = activity._id === "global-square";
@@ -2873,7 +2713,7 @@ function RoomModal({
     try {
       const res = await cloud.invoke("user-ops", { type: "get-info", username });
       if (res) setProfileUser(res);
-    } catch (e) {
+    } catch {
       alert("获取档案失败（网络错误）");
     } finally {
       setProfileLoading(false);
@@ -2895,7 +2735,7 @@ function RoomModal({
         alert(res?.msg || "发送失败");
         setChatText(text);
       }
-    } catch (e) {
+    } catch {
       alert("网络错误");
       setChatText(text);
     } finally {
@@ -2919,7 +2759,7 @@ function RoomModal({
         },
       });
       alert("🎉 已成功转发到大广场！");
-    } catch (e) {
+    } catch {
       alert("发送失败");
     }
   };
@@ -2946,7 +2786,7 @@ function RoomModal({
         if (!res?.ok) {
           alert(res?.msg || "图片发送失败");
         }
-      } catch (err) {
+      } catch {
         alert("网络错误");
       } finally {
         setChatLoading(false);
@@ -2994,7 +2834,7 @@ function RoomModal({
             const mine = m.sender === currentUser;
             const highlight = !!highlightMsgId && m._id === highlightMsgId;
 
-            if (m.msgType === "share_activity" && m.payload) {
+            if (m.msgType === "share_activity" && isSharedActivityPayload(m.payload)) {
               const act = m.payload;
               return (
                 <div
@@ -3225,7 +3065,7 @@ function RoomModal({
           </div>
         </div>
 
-        <div className="flex-1 px-4 overflow-y-auto pb-24">
+        <div className="relative flex-1 px-4 overflow-y-auto pb-24 bg-gradient-to-b from-blue-50 via-purple-50/50 to-white rounded-t-3xl">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-black text-gray-700">房间座位 ({seatedUsers.length}/{SEAT_COUNT})</div>
             {memberLoading && (
@@ -3234,29 +3074,49 @@ function RoomModal({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-5 sm:gap-8">
             {seats.map((u, idx) => {
               const empty = !u;
               const info = u ? (memberInfoMap[u] || null) : null;
               const isMe = u === currentUser;
+              const floatClass = idx % 2 === 0 ? "animate-float" : "animate-float-delayed";
               return (
-                <button
+                <div
                   key={idx}
-                  disabled={empty}
-                  onClick={() => { if (u) openUserProfile(u); }}
-                  className={`relative rounded-[2rem] p-4 text-left transition active:scale-[0.99] ${empty ? "bg-white/40 border border-dashed border-gray-200" : "bg-white/85 border border-white/60 shadow-sm"}`}
+                  className="animate-seat-in"
+                  style={{ animationDelay: `${idx * 60}ms` }}
                 >
-                  <div className="absolute top-3 right-3 text-[10px] font-black text-gray-300">#{idx + 1}</div>
-                  <div className="mt-6 flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm ${empty ? "bg-gray-100 text-gray-300" : isMe ? "bg-black text-white" : "bg-blue-100 text-blue-700"}`}>
-                      {u ? u[0] : "+"}
+                  <button
+                    disabled={empty}
+                    onClick={() => { if (u) openUserProfile(u); }}
+                    className={`glass-ripple relative w-full max-w-[180px] mx-auto aspect-square rounded-full transition-all duration-300 active:scale-[0.95] ${floatClass} ${
+                      empty
+                        ? "bg-white/10 border border-white/20 border-dashed backdrop-blur-sm hover:bg-white/20"
+                        : "bg-gradient-to-br from-white/40 to-white/10 border border-white/50 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:-translate-y-1"
+                    } flex flex-col items-center justify-center p-3 text-center`}
+                  >
+                    <div className="text-[10px] font-black text-gray-400/50 mb-1">#{idx + 1}</div>
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-sm shadow-inner mb-2 ${
+                      empty
+                        ? "bg-white/20 text-gray-400/70"
+                        : isMe
+                          ? "bg-gradient-to-tr from-gray-800 to-black text-white shadow-lg shadow-black/20"
+                          : "bg-gradient-to-tr from-blue-100 to-blue-50 text-blue-600 shadow-md shadow-blue-200/50"
+                    }`}>
+                      {u ? u[0].toUpperCase() : "+"}
                     </div>
-                    <div className="min-w-0">
-                      <div className={`font-black text-sm truncate w-20 ${empty ? "text-gray-300" : "text-gray-900"}`}>{u || "空座"}</div>
-                      {!empty && <div className="text-[10px] text-gray-400 font-bold">{info?.profile?.mbti || "MBTI"}</div>}
+                    <div className="min-w-0 flex flex-col items-center">
+                      <div className={`font-black text-xs truncate w-24 ${empty ? "text-gray-400/60" : "text-gray-800"}`}>
+                        {u || "空座"}
+                      </div>
+                      {!empty && (
+                        <div className="text-[10px] text-gray-500/80 font-bold mt-0.5">
+                          {info?.profile?.mbti || "MBTI"}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -3290,7 +3150,7 @@ function RoomModal({
                   const mine = m.sender === currentUser;
                   const highlight = !!highlightMsgId && m._id === highlightMsgId;
 
-                  if (m.msgType === "share_activity" && m.payload) {
+                  if (m.msgType === "share_activity" && isSharedActivityPayload(m.payload)) {
                     const act = m.payload;
                     return (
                       <div
