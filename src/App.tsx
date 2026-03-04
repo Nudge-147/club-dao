@@ -2,10 +2,11 @@ import code4teamQR from "./assets/code4team.jpg";
 import groupQrImg from "./assets/team_code.jpg";
 import adminQrImg from "./assets/person_code.jpg";
 import { useState, useEffect, useMemo, useRef, useCallback, type ChangeEvent } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Cloud, EnvironmentType } from "laf-client-sdk";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
-import { MapPin, Zap, User, Calendar, Search, Lock, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight, Image as ImageIcon } from "lucide-react";
+import { MapPin, Zap, User, Calendar, Search, Palette, Home, LayoutGrid, Eraser, Shield, ShieldAlert, ShieldCheck, Mail, Edit3, Save, Trophy, Star, Crown, Gift, Sparkles, QrCode, BadgeCheck, Megaphone, UserMinus, Users, Eye, Share2, Download, X, Copy, HeartHandshake, Code2, Coffee, ChevronRight, Image as ImageIcon } from "lucide-react";
 import AnnouncementModal from "./components/AnnouncementModal";
 
 // ⚠️ 前端白名单 (控制 Tab 显示)，需要与后端保持一致
@@ -76,7 +77,7 @@ function isSharedActivityPayload(payload: unknown): payload is SharedActivityPay
   );
 }
 
-type CategoryType = "美食搭子" | "学习搭子" | "运动健身" | "桌游搭子" | "逛街散步" | "游戏搭子" | "旅行搭子" | "文艺演出";
+type CategoryType = "吃喝玩乐" | "运动流汗" | "硬核自习" | "探索随机";
 
 interface Activity {
   _id: string;
@@ -120,13 +121,102 @@ interface ActivityDraft {
 
 // --- 皮肤配置 ---
 const THEMES = {
-  warm: { name: "暖阳橙", bg: "bg-[#FFF8F0]", card: "bg-white", primary: "bg-orange-500", primaryText: "text-orange-500", accent: "bg-yellow-400", icon: "text-orange-600", border: "border-orange-100", badge: "bg-orange-50 text-orange-600", navActive: "text-orange-600", navInactive: "text-gray-300" },
-  cool: { name: "清凉蓝", bg: "bg-[#F0F8FF]", card: "bg-white", primary: "bg-blue-600", primaryText: "text-blue-600", accent: "bg-cyan-400", icon: "text-blue-600", border: "border-blue-100", badge: "bg-blue-50 text-blue-600", navActive: "text-blue-600", navInactive: "text-gray-300" },
-  nju: { name: "南大紫", bg: "bg-[#F3E5F5]", card: "bg-white/90", primary: "bg-[#6A005F]", primaryText: "text-[#6A005F]", accent: "bg-purple-400", icon: "text-[#6A005F]", border: "border-purple-200", badge: "bg-purple-100 text-purple-800", navActive: "text-[#6A005F]", navInactive: "text-gray-400" }
+  fairy: {
+    id: "fairy",
+    name: "神仙青",
+    bg: "bg-[#F2E3C6]",
+    primary: "bg-[#0095D9]",
+    primaryText: "text-[#0095D9]",
+    badge: "bg-[#FF4C00] text-white",
+    navActive: "text-[#FF4C00]",
+    border: "border-[#0095D9]",
+    cardBg: "bg-white/70 backdrop-blur-md",
+    textMain: "text-slate-800",
+    card: "bg-white/80",
+    accent: "bg-[#0095D9]",
+    icon: "text-[#0095D9]",
+    navInactive: "text-slate-400",
+    glowPrimary: "rgba(0,149,217,0.18)",
+    glowSecondary: "rgba(255,76,0,0.14)",
+    primaryBorder: "border-[#0095D9]",
+  },
+  forest: {
+    id: "forest",
+    name: "绿沈幽",
+    bg: "bg-[#FCF5E2]",
+    primary: "bg-[#0C8918]",
+    primaryText: "text-[#0C8918]",
+    badge: "bg-[#FCC96E] text-[#0C8918]",
+    navActive: "text-[#0C8918]",
+    border: "border-[#0C8918]",
+    cardBg: "bg-white/70 backdrop-blur-md",
+    textMain: "text-slate-800",
+    card: "bg-white/80",
+    accent: "bg-[#0C8918]",
+    icon: "text-[#0C8918]",
+    navInactive: "text-slate-400",
+    glowPrimary: "rgba(12,137,24,0.16)",
+    glowSecondary: "rgba(252,201,110,0.18)",
+    primaryBorder: "border-[#0C8918]",
+  },
+  british: {
+    id: "british",
+    name: "英伦红",
+    bg: "bg-[#0f0b0a]",
+    primary: "bg-[#4A010A]",
+    primaryText: "text-[#C18F4E]",
+    badge: "bg-[#C18F4E] text-[#4A010A]",
+    navActive: "text-[#C18F4E]",
+    border: "border-[#C18F4E]",
+    cardBg: "bg-[#312520]/80 backdrop-blur-md",
+    textMain: "text-[#F2E3C6]",
+    card: "bg-[#312520]/80",
+    accent: "bg-[#C18F4E]",
+    icon: "text-[#C18F4E]",
+    navInactive: "text-[#9E8B73]",
+    glowPrimary: "rgba(193,143,78,0.18)",
+    glowSecondary: "rgba(74,1,10,0.20)",
+    primaryBorder: "border-[#C18F4E]",
+  },
 };
 
 type ThemeKey = keyof typeof THEMES;
-const CATEGORY_OPTIONS: CategoryType[] = ["美食搭子", "学习搭子", "运动健身", "桌游搭子", "逛街散步", "游戏搭子", "旅行搭子", "文艺演出"];
+type ThemePalette = (typeof THEMES)[ThemeKey];
+const CATEGORY_OPTIONS: CategoryType[] = ["吃喝玩乐", "运动流汗", "硬核自习", "探索随机"];
+const CATEGORY_LABELS: Record<CategoryType, string> = {
+  吃喝玩乐: "🍔 吃喝玩乐",
+  运动流汗: "🏃‍♂️ 运动流汗",
+  硬核自习: "📚 硬核自习",
+  探索随机: "🌍 探索随机",
+};
+const CATEGORY_BADGE_STYLES: Record<CategoryType, string> = {
+  吃喝玩乐: "bg-orange-100 text-orange-700",
+  运动流汗: "bg-emerald-100 text-emerald-700",
+  硬核自习: "bg-indigo-100 text-indigo-700",
+  探索随机: "bg-fuchsia-100 text-fuchsia-700",
+};
+const LEGACY_TO_META_CATEGORY: Record<string, CategoryType> = {
+  吃喝玩乐: "吃喝玩乐",
+  运动流汗: "运动流汗",
+  硬核自习: "硬核自习",
+  探索随机: "探索随机",
+  约饭: "吃喝玩乐",
+  美食搭子: "吃喝玩乐",
+  桌游搭子: "吃喝玩乐",
+  逛街散步: "吃喝玩乐",
+  运动健身: "运动流汗",
+  学习搭子: "硬核自习",
+  硬核竞赛: "硬核自习",
+  文艺演出: "探索随机",
+  艺术展览: "探索随机",
+  旅行搭子: "探索随机",
+  游戏搭子: "探索随机",
+};
+
+function normalizeCategory(category: string | undefined): CategoryType {
+  if (!category) return "探索随机";
+  return LEGACY_TO_META_CATEGORY[category] || "探索随机";
+}
 
 // ===== Admin 组件 =====
 const AdminView = ({
@@ -440,12 +530,27 @@ function App() {
   const [posterTarget, setPosterTarget] = useState<Activity | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState<"全部" | CategoryType>("全部");
+  const [squareCategory, setSquareCategory] = useState<"全部" | CategoryType>("全部");
   const [tagFilter, setTagFilter] = useState<string>("");
-  const categoryFilter = activeCategory;
-  const setCategoryFilter = setActiveCategory;
+  const categoryFilter = squareCategory;
+  const setCategoryFilter = setSquareCategory;
   const [inputTimeStr, setInputTimeStr] = useState("");
-  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [soulQuestion, setSoulQuestion] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [genderLimit, setGenderLimit] = useState("不限");
+  const [identityLimit, setIdentityLimit] = useState("不限");
+  const [activeCategory, setActiveCategory] = useState<CategoryType>(CATEGORY_OPTIONS[0]);
+  const [activeScene, setActiveScene] = useState("仙林");
+  const [activeTime, setActiveTime] = useState("今天");
+  const [isVerifiedOnly, setIsVerifiedOnly] = useState(false);
+  const categories = CATEGORY_OPTIONS;
+  const timeChips = ["今天", "明晚", "本周末", "随时"];
+  const scenes = [
+    { id: "仙林", svg: <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full"><path d="M20 60 L50 30 L80 60" /><path d="M30 50 L30 90 L70 90 L70 50" /><circle cx="50" cy="55" r="5" /></svg> },
+    { id: "鼓楼", svg: <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full"><path d="M40 30 L50 10 L60 30" /><path d="M40 30 L40 90 L60 90 L60 30" /><rect x="45" y="45" width="10" height="15" /></svg> },
+    { id: "苏州", svg: <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full"><path d="M20 50 Q 50 30 80 50" /><path d="M35 45 L35 80 L65 80 L65 45" /><path d="M20 85 Q 35 75 50 85 T 80 85" /></svg> },
+    { id: "浦口", svg: <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full"><circle cx="50" cy="40" r="15" /><path d="M50 55 L50 90" /><path d="M30 90 L70 90" /><path d="M50 65 L35 85" /><path d="M50 65 L65 85" /></svg> },
+  ] as const;
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<Activity | null>(null);
   const [roomOpen, setRoomOpen] = useState(false);
@@ -540,21 +645,7 @@ const [tags, setTags] = useState<string[]>([]);
     }
   }, [activeTab, isAdminUser]);
 
-  const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
-  const handleDateChange = (key: keyof typeof dateState, val: string) => {
-    const numVal = parseInt(val);
-    setDateState(prev => {
-      const next = { ...prev, [key]: numVal };
-      if (key === 'year' || key === 'month') {
-        const maxDays = getDaysInMonth(next.year, next.month);
-        if (next.day > maxDays) next.day = maxDays;
-      }
-      return next;
-    });
-  };
-  const range = (start: number, end: number) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
-
-  const [currentTheme, setCurrentTheme] = useState<ThemeKey>("warm");
+  const [currentTheme, setCurrentTheme] = useState<ThemeKey>("fairy");
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(true);
   const [loginName, setLoginName] = useState("");
@@ -652,6 +743,67 @@ const [tags, setTags] = useState<string[]>([]);
   const isFounder = secretBadge.includes("Founder");
 
   const theme = THEMES[currentTheme];
+  const navUiSkin = {
+    fairy: {
+      notifyBadge: "bg-[#FF4C00] text-white",
+      adminActive: "text-[#FF4C00]",
+      adminInactive: "text-slate-300",
+    },
+    forest: {
+      notifyBadge: "bg-[#FCC96E] text-[#0C8918]",
+      adminActive: "text-[#0C8918]",
+      adminInactive: "text-slate-300",
+    },
+    british: {
+      notifyBadge: "bg-[#C18F4E] text-[#4A010A]",
+      adminActive: "text-[#C18F4E]",
+      adminInactive: "text-[#9E8B73]",
+    },
+  }[theme.id as ThemeKey];
+
+  const fabSkin = {
+    fairy: {
+      shellShadow: "shadow-[0_8px_30px_rgba(0,149,217,0.25)] hover:shadow-[0_8px_40px_rgba(255,76,0,0.3)]",
+      ring: "bg-[conic-gradient(from_0deg,transparent_0%,rgba(0,149,217,0.2)_20%,#0095D9_40%,#FF4C00_60%,transparent_80%)]",
+      inner: "bg-white group-hover:bg-slate-50",
+      label: "text-slate-800",
+      plus: "text-[#0095D9]",
+    },
+    forest: {
+      shellShadow: "shadow-[0_8px_30px_rgba(12,137,24,0.22)] hover:shadow-[0_8px_40px_rgba(252,201,110,0.35)]",
+      ring: "bg-[conic-gradient(from_0deg,transparent_0%,rgba(12,137,24,0.18)_20%,#0C8918_40%,#FCC96E_60%,transparent_80%)]",
+      inner: "bg-white group-hover:bg-[#F8FAF6]",
+      label: "text-[#1F3A24]",
+      plus: "text-[#0C8918]",
+    },
+    british: {
+      shellShadow: "shadow-[0_10px_34px_rgba(0,0,0,0.45)] hover:shadow-[0_10px_40px_rgba(193,143,78,0.28)]",
+      ring: "bg-[conic-gradient(from_0deg,transparent_0%,rgba(193,143,78,0.18)_20%,#C18F4E_40%,#4A010A_60%,transparent_80%)]",
+      inner: "bg-[#312520] group-hover:bg-[#3A2B26]",
+      label: "text-[#F2E3C6]",
+      plus: "text-[#C18F4E]",
+    },
+  }[theme.id as ThemeKey];
+  const squareEntrySkin = {
+    fairy: {
+      card: "bg-gradient-to-r from-[#0095D9] via-[#2DB8F3] to-[#FF4C00]",
+      chip: "bg-white/20 text-white",
+      sub: "text-white/85",
+      icon: "bg-white/20",
+    },
+    forest: {
+      card: "bg-gradient-to-r from-[#0C8918] via-[#3BAE49] to-[#FCC96E]",
+      chip: "bg-white/25 text-[#143A1A]",
+      sub: "text-[#173B1D]/85",
+      icon: "bg-white/25",
+    },
+    british: {
+      card: "bg-gradient-to-r from-[#4A010A] via-[#6B121A] to-[#C18F4E]",
+      chip: "bg-[#F2E3C6]/20 text-[#F2E3C6]",
+      sub: "text-[#F2E3C6]/85",
+      icon: "bg-[#F2E3C6]/18",
+    },
+  }[theme.id as ThemeKey];
 
   const getUnreadCount = (act: Activity) => {
     if (act._id === "global-square") return 0;
@@ -739,7 +891,7 @@ const [tags, setTags] = useState<string[]>([]);
   const squareList = useMemo(() => {
     return activities.filter(a => {
       const matchSearch = a.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCategory = activeCategory === "全部" || a.category === activeCategory;
+      const matchCategory = squareCategory === "全部" || normalizeCategory(a.category) === squareCategory;
       const matchTag = !tagFilter || (a.tags || []).includes(tagFilter);
 
       const isActive = (a.status || 'active') === 'active';
@@ -748,13 +900,9 @@ const [tags, setTags] = useState<string[]>([]);
 
       return matchSearch && matchCategory && matchTag && isActive && !expired && !isHidden;
     });
-  }, [activities, searchTerm, activeCategory, currentUser, tagFilter]);
+  }, [activities, searchTerm, squareCategory, currentUser, tagFilter]);
 
   const handleSetTheme = (theme: ThemeKey) => {
-    if (theme === "nju" && userActivityCount < 10) { 
-      alert(`🔒 解锁 [南大紫] 需要累计参与 10 次活动。\n\n当前进度：${userActivityCount}/10\n\n加油，多发活动或多参与！`); 
-      return; 
-    }
     setCurrentTheme(theme); localStorage.setItem("club_theme", theme); setShowThemeModal(false);
   };
 
@@ -801,7 +949,6 @@ const [tags, setTags] = useState<string[]>([]);
 
   const resetCreateDraft = () => {
     const now = new Date();
-    setCreateStep(1);
     setActivityDraft({
       title: "",
       description: "",
@@ -819,6 +966,14 @@ const [tags, setTags] = useState<string[]>([]);
       vibe: [],
       host_flags: [],
     });
+    setSoulQuestion("");
+    setShowAdvanced(false);
+    setGenderLimit("不限");
+    setIdentityLimit("不限");
+    setActiveCategory(CATEGORY_OPTIONS[0]);
+    setActiveScene("仙林");
+    setActiveTime("今天");
+    setIsVerifiedOnly(false);
     setTags([]);
     setTagInput("");
     setDateState({
@@ -827,16 +982,6 @@ const [tags, setTags] = useState<string[]>([]);
       day: now.getDate(),
       hour: now.getHours(),
       minute: now.getMinutes(),
-    });
-  };
-
-  const toggleInList = (key: "vibe" | "host_flags", v: string, limit: number) => {
-    setReqDraft(prev => {
-      const arr = prev[key];
-      const has = arr.includes(v);
-      if (has) return { ...prev, [key]: arr.filter(x => x !== v) };
-      if (arr.length >= limit) return prev;
-      return { ...prev, [key]: [...arr, v] };
     });
   };
 
@@ -1097,20 +1242,29 @@ const [tags, setTags] = useState<string[]>([]);
     if (!requireStrongPwd()) return;
 
     const title = (activityDraft.title || "").trim();
-    const location = (activityDraft.location || "").trim();
+    const location = (activityDraft.location || activeScene).trim();
     const description = (activityDraft.description || "").trim();
-    const category = activityDraft.category || "约饭";
+    const category = activeCategory || CATEGORY_OPTIONS[0];
     const { minVal, maxVal } = normalizePeople();
-    const timeString = inputTimeStr.trim();
-    const soulQuestion = (activityDraft.soul_question || "").trim();
-    if (soulQuestion.length > 40) { alert("灵魂一问最多 40 字"); return; }
+    const timeString = activeTime || inputTimeStr.trim();
+    const soulQuestionValue = (soulQuestion || "").trim();
+    if (soulQuestionValue.length > 40) { alert("灵魂一问最多 40 字"); return; }
 
     // ✅ 前端兜底校验（避免请求后端才提示）
-    if (!title) { alert("❌ 标题不能为空"); setCreateStep(1); return; }
-    if (!location) { alert("❌ 地点不能为空"); setCreateStep(1); return; }
-    if (!timeString) { alert("⏰ 请填写时间"); setCreateStep(1); return; }
-    if (minVal < 2) { alert("❌ 至少 2 人"); setCreateStep(1); return; }
-    if (maxVal < minVal) { alert("❌ 人数设置错误"); setCreateStep(1); return; }
+    if (!title) { alert("❌ 标题不能为空"); return; }
+    if (!location) { alert("❌ 地点不能为空"); return; }
+    if (!timeString) { alert("⏰ 请填写时间"); return; }
+    if (minVal < 2) { alert("❌ 至少 2 人"); return; }
+    if (maxVal < minVal) { alert("❌ 人数设置错误"); return; }
+
+    const requirementGender =
+      genderLimit === "仅女生" ? "female_only" :
+      genderLimit === "仅男生" ? "male_only" : "any";
+    const requirementIdentity =
+      identityLimit === "本科" ? "undergrad" :
+      identityLimit === "研究生" ? "graduate" :
+      identityLimit === "博士" ? "PhD" : "any";
+    const requirementStranger = reqDraft.stranger || "ok";
 
     const newActivity = {
       title,
@@ -1121,9 +1275,15 @@ const [tags, setTags] = useState<string[]>([]);
       time: timeString,
       location,
       author: currentUser,
-      requires_verification: !!activityDraft.requires_verification,
-      requirements: reqDraft,
-      soul_question: soulQuestion,
+      requires_verification: !!isVerifiedOnly,
+      requirements: {
+        gender: requirementGender,
+        identity: requirementIdentity,
+        stranger: requirementStranger,
+        vibe: reqDraft.vibe || [],
+        host_flags: reqDraft.host_flags || [],
+      },
+      soul_question: soulQuestionValue,
       tags,
       topic: "",
     };
@@ -1170,7 +1330,7 @@ const [tags, setTags] = useState<string[]>([]);
               value === cat ? `${theme.primary} text-white shadow-md` : "bg-white text-gray-500 border border-gray-100"
             }`}
           >
-            {cat}
+            {cat === "全部" ? cat : CATEGORY_LABELS[cat]}
           </button>
         ))}
       </div>
@@ -1193,6 +1353,7 @@ const [tags, setTags] = useState<string[]>([]);
     const isGhost = isHidden;
       const canFinish = joined.length >= minP;
     const unread = getUnreadCount(activity);
+    const displayCategory = normalizeCategory(activity.category);
 
     const actionButtons: React.ReactNode[] = [];
     actionButtons.push(
@@ -1308,7 +1469,7 @@ const [tags, setTags] = useState<string[]>([]);
         
         <div className="flex justify-between items-start mb-3 pr-10">
           <div className="flex gap-2 items-center mb-1">
-             <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${activity.category === '约饭' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{activity.category || "约饭"}</span>
+             <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${CATEGORY_BADGE_STYLES[displayCategory]}`}>{CATEGORY_LABELS[displayCategory]}</span>
              {activity.requires_verification && <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-purple-100 text-purple-600 flex items-center gap-1"><ShieldCheck size={10}/> 仅限认证</span>}
           </div>
           <div className="flex items-center gap-2">
@@ -1516,7 +1677,7 @@ const [tags, setTags] = useState<string[]>([]);
 
   return (
     <div
-      className="min-h-screen bg-[#F4F8FF] text-[#0B1220] font-sans pb-32 transition-colors duration-500"
+      className={`min-h-screen ${theme.bg} ${theme.textMain} font-sans pb-32 transition-colors duration-500`}
     >
       <style>{`
       @keyframes floatIn {
@@ -1598,17 +1759,17 @@ const [tags, setTags] = useState<string[]>([]);
 
             <button 
               onClick={openGlobalSquare}
-              className="w-full mb-4 mt-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-4 text-white shadow-lg active:scale-95 transition-transform flex items-center justify-between"
+              className={`w-full mb-4 mt-2 rounded-2xl p-4 shadow-lg active:scale-95 transition-transform flex items-center justify-between ${squareEntrySkin.card}`}
             >
               <div className="text-left">
                 <div className="font-black text-lg flex items-center gap-2">
-                  🌍 聊天大广场 <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">LIVE</span>
+                  🌍 聊天大广场 <span className={`text-[10px] px-2 py-0.5 rounded-full ${squareEntrySkin.chip}`}>LIVE</span>
                 </div>
-                <div className="text-xs font-bold text-white/80 mt-1">
+                <div className={`text-xs font-bold mt-1 ${squareEntrySkin.sub}`}>
                   全服热聊中，点击加入讨论...
                 </div>
               </div>
-              <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <div className={`h-10 w-10 rounded-full flex items-center justify-center backdrop-blur-sm ${squareEntrySkin.icon}`}>
                 <span className="text-xl">💬</span>
               </div>
             </button>
@@ -1933,18 +2094,18 @@ const [tags, setTags] = useState<string[]>([]);
       {activeTab === 'square' && (
         <button
           onClick={() => { resetCreateDraft(); setShowCreateModal(true); }}
-          className="fixed bottom-24 right-6 z-30 group active:scale-95 transition-all duration-300 shadow-[0_8px_30px_rgba(0,149,217,0.25)] hover:shadow-[0_8px_40px_rgba(255,76,0,0.3)] rounded-full"
+          className={`fixed bottom-24 right-6 z-30 group active:scale-95 transition-all duration-300 rounded-full ${fabSkin.shellShadow}`}
         >
           <div className="relative overflow-hidden rounded-full p-[2px] flex items-center justify-center w-[88px] h-[44px]">
-            <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0%,rgba(0,149,217,0.2)_20%,#0095D9_40%,#FF4C00_60%,transparent_80%)]" />
-            <div className="relative z-10 w-full h-full rounded-full flex items-center justify-center gap-1 bg-white group-hover:bg-slate-50 transition-colors">
+            <div className={`absolute top-[-50%] left-[-50%] w-[200%] h-[200%] animate-[spin_3s_linear_infinite] ${fabSkin.ring}`} />
+            <div className={`relative z-10 w-full h-full rounded-full flex items-center justify-center gap-1 transition-colors ${fabSkin.inner}`}>
               <span
-                className="font-black text-[15px] tracking-[0.15em] ml-1.5 text-slate-800"
+                className={`font-black text-[15px] tracking-[0.15em] ml-1.5 ${fabSkin.label}`}
                 style={{ fontFamily: 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif' }}
               >
                 组局
               </span>
-              <svg className="w-3.5 h-3.5 text-[#FF4C00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-3.5 h-3.5 ${fabSkin.plus}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
               </svg>
             </div>
@@ -1961,7 +2122,7 @@ const [tags, setTags] = useState<string[]>([]);
           <div className="relative">
             <div className="text-xl">🔔</div>
             {notifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
+              <span className={`absolute -top-1 -right-1 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce ${navUiSkin.notifyBadge}`}>
                 {notifications.length > 99 ? "99+" : notifications.length}
               </span>
             )}
@@ -1971,7 +2132,7 @@ const [tags, setTags] = useState<string[]>([]);
         {ADMIN_USERS.includes(currentUser) && (
           <button
             onClick={() => setActiveTab("admin")}
-            className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === "admin" ? "text-red-600" : "text-gray-300"}`}
+            className={`flex flex-col items-center gap-1 w-16 transition-colors ${activeTab === "admin" ? navUiSkin.adminActive : navUiSkin.adminInactive}`}
           >
             <ShieldAlert size={24} strokeWidth={activeTab === "admin" ? 3 : 2} />
             <span className="text-[10px] font-bold">Admin</span>
@@ -1981,7 +2142,34 @@ const [tags, setTags] = useState<string[]>([]);
       </div>
 
       {/* 主题弹窗 */}
-      {showThemeModal && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up"><h3 className="text-xl font-black mb-6 text-center">选择界面风格</h3><div className="grid grid-cols-3 gap-4"><button onClick={() => handleSetTheme("warm")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='warm'?'border-orange-500 bg-orange-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-orange-500 shadow-md"></div><span className="text-xs font-bold">暖阳橙</span></button><button onClick={() => handleSetTheme("cool")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='cool'?'border-blue-500 bg-blue-50':'border-transparent bg-gray-50'}`}><div className="w-8 h-8 rounded-full bg-blue-500 shadow-md"></div><span className="text-xs font-bold">清凉蓝</span></button><button onClick={() => handleSetTheme("nju")} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 ${currentTheme==='nju'?'border-purple-800 bg-purple-50':'border-transparent bg-gray-50'} relative overflow-hidden`}><div className="w-8 h-8 rounded-full bg-[#6A005F] shadow-md flex items-center justify-center">{userActivityCount < 10 && <Lock size={14} className="text-white/50"/>}</div><span className="text-xs font-bold text-[#6A005F]">南大紫</span></button></div><button onClick={() => setShowThemeModal(false)} className="w-full mt-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">关闭</button></div></div>)}
+      {showThemeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 animate-slide-up">
+            <h3 className="text-xl font-black mb-6 text-center">选择界面风格</h3>
+            <div className="flex gap-4 justify-center mt-6">
+              {(Object.keys(THEMES) as ThemeKey[]).map((key) => {
+                const t = THEMES[key];
+                return (
+                <button
+                  key={t.id}
+                  onClick={() => handleSetTheme(key)}
+                  className={`relative w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 ${t.bg} border-2 ${currentTheme === t.id ? t.border : "border-transparent"}`}
+                >
+                  <div className="flex gap-1">
+                    <div className={`w-3 h-3 rounded-full ${t.primary}`} />
+                    <div className={`w-3 h-3 rounded-full ${t.badge.split(" ")[0]}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold mt-1 ${t.textMain}`}>{t.name}</span>
+                </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setShowThemeModal(false)} className="w-full mt-6 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
       
       {showJoinConfirm && pendingJoin && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
@@ -2086,416 +2274,241 @@ const [tags, setTags] = useState<string[]>([]);
         </div>
       )}
 
-      {/* 发布活动弹窗 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-50 p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6 pt-4"><h2 className="text-3xl font-black">发布活动</h2><button onClick={() => { resetCreateDraft(); setShowCreateModal(false); }} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-400">✕</button></div>
-          <form onSubmit={handleCreateActivity} className="flex-1 space-y-4 overflow-y-auto pb-20">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex gap-2">
-                {[1, 2, 3].map((s) => (
-                  <div key={s} className={`h-2 w-10 rounded-full ${createStep >= s ? "bg-black" : "bg-gray-200"}`} />
-                ))}
-              </div>
-              <div className="text-xs font-black text-gray-500">第 {createStep}/3 步</div>
-            </div>
-
-            {createStep === 1 && (
-  <div className="flex flex-col gap-4">
-
-    {/* 分类 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">分类</label>
-      <div className="grid grid-cols-2 gap-3">
-        {CATEGORY_OPTIONS.map((c) => (
-          <label key={c} className="flex-1 cursor-pointer">
-            <input
-              type="radio"
-              name="category"
-              value={c}
-              checked={activityDraft.category === c}
-              onChange={() => setActivityDraft(p => ({ ...p, category: c }))}
-              className="peer hidden"
-            />
-            <div className="bg-gray-100 peer-checked:bg-blue-600 peer-checked:text-white py-3 rounded-xl text-center font-bold transition-all">
-              {c}
-            </div>
-          </label>
-        ))}
-      </div>
-    </div>
-
-    {/* 标题 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标题</label>
-      <input
-        value={activityDraft.title}
-        onChange={e => setActivityDraft(p => ({ ...p, title: e.target.value }))}
-        required
-        className="w-full text-2xl font-bold border-b-2 border-gray-100 py-3 outline-none bg-transparent"
-        placeholder="例如：周末火锅局"
-      />
-    </div>
-
-    {/* 时间（你这个本来就是 state，保持不动） */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">时间</label>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <select
-          value={dateState.year}
-          onChange={e => handleDateChange("year", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(2025, 2030).map(y => (
-            <option key={y} value={y}>{y} 年</option>
-          ))}
-        </select>
-        <select
-          value={dateState.month}
-          onChange={e => handleDateChange("month", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(1, 12).map(m => (
-            <option key={m} value={m}>{m} 月</option>
-          ))}
-        </select>
-        <select
-          value={dateState.day}
-          onChange={e => handleDateChange("day", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(1, getDaysInMonth(dateState.year, dateState.month)).map(d => (
-            <option key={d} value={d}>{d} 日</option>
-          ))}
-        </select>
-        <select
-          value={dateState.hour}
-          onChange={e => handleDateChange("hour", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(0, 23).map(h => (
-            <option key={h} value={h}>{h} 时</option>
-          ))}
-        </select>
-        <select
-          value={dateState.minute}
-          onChange={e => handleDateChange("minute", e.target.value)}
-          className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-        >
-          {range(0, 59).map(mi => (
-            <option key={mi} value={mi}>{mi} 分</option>
-          ))}
-        </select>
-      </div>
-    </div>
-
-    {/* 地点 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">地点</label>
-      <input
-        value={activityDraft.location}
-        onChange={e => setActivityDraft(p => ({ ...p, location: e.target.value }))}
-        required
-        className="w-full bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-      />
-    </div>
-
-    {/* 人数 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">人数</label>
-      <div className="flex gap-4 items-center">
-        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-          <span className="text-xs text-gray-400 font-bold">最少</span>
-          <input
-            type="number"
-            placeholder="2"
-            value={activityDraft.min_people}
-            onChange={e =>
-              setActivityDraft(p => ({ ...p, min_people: e.target.value }))
-            }
-            className="w-full bg-transparent font-bold outline-none text-center"
-          />
-        </div>
-
-        <span className="text-gray-300 font-bold">-</span>
-
-        <div className="flex-1 bg-gray-50 rounded-2xl p-4 flex items-center gap-2">
-          <span className="text-xs text-gray-400 font-bold">最多</span>
-          <input
-            type="number"
-            placeholder="5"
-            value={activityDraft.max_people}
-            onChange={e =>
-              setActivityDraft(p => ({ ...p, max_people: e.target.value }))
-            }
-            className="w-full bg-transparent font-bold outline-none text-center"
-          />
-        </div>
-      </div>
-    </div>
-
-    {/* 仅限认证 */}
-    <div className="flex items-center justify-between bg-purple-50 p-4 rounded-2xl border border-purple-100">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700">
-          <ShieldCheck size={20}/>
-        </div>
-        <div>
-          <div className="font-bold text-sm text-purple-900">仅限认证校友</div>
-          <div className="text-[10px] text-purple-500 font-bold">开启后，未认证用户无法加入</div>
-        </div>
-      </div>
-
-      <input
-        type="checkbox"
-        checked={activityDraft.requires_verification}
-        onChange={e =>
-          setActivityDraft(p => ({ ...p, requires_verification: e.target.checked }))
-        }
-      />
-    </div>
-
-    {/* 详情 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">详情</label>
-      <textarea
-        value={activityDraft.description}
-        onChange={e => setActivityDraft(p => ({ ...p, description: e.target.value }))}
-        placeholder="年级要求、口味偏好、具体流程..."
-        className="w-full bg-gray-50 rounded-2xl p-4 h-32 resize-none outline-none font-medium text-sm"
-      />
-    </div>
-
-    {/* 标签 */}
-    <div className="space-y-2">
-      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">标签</label>
-
-      <div className="flex gap-2">
-        <input
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
-          className="flex-1 bg-gray-50 rounded-2xl p-4 font-bold outline-none"
-          placeholder="输入标签，回车添加（最多6个）"
-        />
-        <button
-          type="button"
-          onClick={() => addTag(tagInput)}
-          className="px-4 rounded-2xl bg-black text-white font-bold"
-        >
-          添加
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-2 pt-1">
-        {["演唱会", "电影", "羽毛球", "桌游"].map(t => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => addTag(t)}
-            className="px-3 py-1 rounded-full bg-white border border-gray-200 text-sm font-bold"
+      {/* 发布活动弹窗（Airy Themed Canvas） */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-white/90 backdrop-blur-2xl flex items-center justify-center overflow-hidden"
           >
-            #{t}
-          </button>
-        ))}
-      </div>
+            <div
+              className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none transition-colors duration-1000"
+              style={{ backgroundColor: theme.glowPrimary }}
+            />
+            <div
+              className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] pointer-events-none transition-colors duration-1000"
+              style={{ backgroundColor: theme.glowSecondary }}
+            />
 
-      <div className="flex flex-wrap gap-2">
-        {tags.map(t => (
-          <span key={t} className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-black text-sm flex items-center gap-2">
-            #{t}
-            <button type="button" onClick={() => removeTag(t)} className="opacity-70 hover:opacity-100">×</button>
-          </span>
-        ))}
-      </div>
-    </div>
+            <motion.div
+              initial={{ y: 50, scale: 0.95 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 50, scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="relative w-full max-w-[1200px] h-full sm:h-auto sm:max-h-[90vh] flex flex-col sm:rounded-[3rem] overflow-y-auto no-scrollbar px-6 sm:px-10 py-8"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <div className="text-xs text-slate-400 font-black tracking-widest uppercase">Create Activity</div>
+                  <div className="text-3xl sm:text-4xl font-black text-slate-900">发布活动</div>
+                </div>
+                <button
+                  onClick={() => { resetCreateDraft(); setShowCreateModal(false); }}
+                  className="w-11 h-11 rounded-full bg-white/70 border border-white flex items-center justify-center text-slate-500 font-black shadow-sm"
+                >
+                  ✕
+                </button>
+              </div>
 
-    <div className="text-xs font-black text-gray-500 mt-1">
-      先把活动信息填清楚，下一步再设置“门槛与氛围”。
-    </div>
-  </div>
-      )}
-
-
-            {createStep === 2 && (
-              <div className="flex flex-col gap-4">
-                <div className="text-sm font-black">加入门槛</div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-black text-gray-500">灵魂一问（可选）</div>
-                    <div className="text-[10px] font-black text-gray-400">
-                      {(activityDraft.soul_question || "").trim().length}/40
+              <form onSubmit={handleCreateActivity} className="grid grid-cols-1 lg:grid-cols-12 gap-10 pb-4">
+                {/* 左侧：输入与选项 */}
+                <div className="col-span-1 lg:col-span-7 space-y-12">
+                  <div className="space-y-4 relative">
+                    <div className="text-[10px] text-slate-400 font-black tracking-widest uppercase">T / 为你的房间命名</div>
+                    <input
+                      type="text"
+                      value={activityDraft.title}
+                      onChange={(e) => setActivityDraft((p) => ({ ...p, title: e.target.value }))}
+                      placeholder="输入一个让人想来的标题"
+                      className="w-full text-4xl sm:text-5xl lg:text-[54px] font-light text-slate-800 bg-transparent border-b border-transparent focus:border-slate-200 outline-none pb-4 transition-colors"
+                    />
+                    <div className="pt-2">
+                      <div className="flex items-center gap-2 bg-white/50 border border-white focus-within:border-slate-200 focus-within:bg-white rounded-2xl px-4 py-3 shadow-sm transition-all">
+                        <span className="text-xl">✨</span>
+                        <input
+                          type="text"
+                          value={soulQuestion}
+                          onChange={(e) => setSoulQuestion(e.target.value.slice(0, 40))}
+                          placeholder="灵魂一问（选填）"
+                          className="flex-1 bg-transparent outline-none text-sm font-bold text-slate-600"
+                        />
+                        <span className="text-[10px] font-black text-slate-300">{soulQuestion.length}/40</span>
+                      </div>
                     </div>
                   </div>
-                  <textarea
-                    value={activityDraft.soul_question || ""}
-                    onChange={e => {
-                      const v = e.target.value.slice(0, 40);
-                      setActivityDraft(p => ({ ...p, soul_question: v }));
-                    }}
-                    placeholder="例如：你确定你是羽毛球零基础？不许来新手局虐菜！"
-                    className="w-full bg-gray-50 rounded-2xl p-3 text-sm font-bold outline-none h-16 resize-none"
-                  />
-                </div>
 
-                <div>
-                  <div className="text-xs font-black text-gray-500 mb-2">性别要求</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {([
-                      { k: "any", t: "不限" },
-                      { k: "female_only", t: "仅女生" },
-                      { k: "male_only", t: "仅男生" },
-                    ] as const).map(it => (
-                      <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, gender: it.k }))}
-                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.gender === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
-                      >
-                        {it.t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-black text-gray-500 mb-2">身份偏好</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {([
-                      { k: "any", t: "不限" },
-                      { k: "undergrad", t: "本科" },
-                      { k: "graduate", t: "研究生" },
-                      { k: "PhD", t: "博士" },
-                    ] as const).map(it => (
-                      <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, identity: it.k }))}
-                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.identity === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
-                      >
-                        {it.t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-black text-gray-500 mb-2">对陌生人接受度</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {([
-                      { k: "ok", t: "完全 OK" },
-                      { k: "new_friends", t: "想认识新朋友" },
-                      { k: "has_circle", t: "我有熟人圈但欢迎加入" },
-                    ] as const).map(it => (
-                      <button type="button" key={it.k}
-                        onClick={() => setReqDraft(p => ({ ...p, stranger: it.k }))}
-                        className={`px-4 py-2 rounded-xl text-sm font-black border ${reqDraft.stranger === it.k ? "bg-black text-white" : "bg-white text-gray-600"}`}
-                      >
-                        {it.t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-black text-gray-500 mb-2">活动氛围（最多选 3 个）</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {[
-                      { k: "quiet", t: "偏安静" },
-                      { k: "lively", t: "偏热闹" },
-                      { k: "casual", t: "轻松随意" },
-                      { k: "serious", t: "比较认真" },
-                      { k: "i_friendly", t: "I 人友好" },
-                      { k: "e_friendly", t: "E 人友好" },
-                    ].map(it => {
-                      const on = reqDraft.vibe.includes(it.k);
-                      return (
-                        <button type="button" key={it.k}
-                          onClick={() => toggleInList("vibe", it.k, 3)}
-                          className={`px-4 py-2 rounded-xl text-sm font-black border ${on ? "bg-black text-white" : "bg-white text-gray-600"}`}
+                  <div className="space-y-4">
+                    <div className="text-[10px] text-slate-400 font-black tracking-widest uppercase">类别</div>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setActiveCategory(c)}
+                          className={`px-4 py-2 rounded-full text-sm font-black border transition-all ${activeCategory === c ? `${theme.primary} text-white border-transparent` : "bg-white/60 text-slate-600 border-white"}`}
                         >
-                          {it.t}
+                          {CATEGORY_LABELS[c]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="text-[10px] text-slate-400 font-black tracking-widest uppercase">时间与人数</div>
+                    <div className="flex flex-wrap gap-2">
+                      {timeChips.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setActiveTime(t)}
+                          className={`px-4 py-2 rounded-full text-sm font-black border transition-all ${activeTime === t ? `${theme.primary} text-white border-transparent` : "bg-white/60 text-slate-600 border-white"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="number"
+                        placeholder="最少人数"
+                        value={activityDraft.min_people}
+                        onChange={(e) => setActivityDraft((p) => ({ ...p, min_people: e.target.value }))}
+                        className="bg-white/70 rounded-2xl px-4 py-3 font-bold text-sm outline-none border border-white"
+                      />
+                      <input
+                        type="number"
+                        placeholder="最多人数"
+                        value={activityDraft.max_people}
+                        onChange={(e) => setActivityDraft((p) => ({ ...p, max_people: e.target.value }))}
+                        className="bg-white/70 rounded-2xl px-4 py-3 font-bold text-sm outline-none border border-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-[10px] text-slate-400 font-black tracking-widest uppercase">详情与标签</div>
+                    <textarea
+                      value={activityDraft.description}
+                      onChange={(e) => setActivityDraft((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="描述一下你想组织什么，越真诚越容易匹配到同频的人。"
+                      className="w-full bg-white/60 rounded-2xl p-4 h-28 resize-none outline-none font-medium text-sm border border-white"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                        className="flex-1 bg-white/60 rounded-2xl p-4 font-bold outline-none border border-white"
+                        placeholder="输入标签，回车添加（最多6个）"
+                      />
+                      <button type="button" onClick={() => addTag(tagInput)} className="px-4 rounded-2xl bg-black text-white font-bold">
+                        添加
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((t) => (
+                        <span key={t} className="px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-700 font-black text-sm flex items-center gap-2">
+                          #{t}
+                          <button type="button" onClick={() => removeTag(t)} className="opacity-70 hover:opacity-100">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="flex items-center gap-2 text-[11px] font-black tracking-widest text-slate-400 uppercase ml-2 hover:text-slate-600 transition-colors"
+                  >
+                    <svg className={`w-3 h-3 transition-transform duration-300 ${showAdvanced ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+                    设置加入门槛 (选填)
+                  </button>
+
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-5 bg-white/40 rounded-2xl border border-white/60 backdrop-blur-sm space-y-5 mt-2 shadow-sm">
+                          <div className="space-y-2">
+                            <div className="text-xs font-black text-slate-500">性别限制</div>
+                            <div className="flex flex-wrap gap-2">
+                              {["不限", "仅女生", "仅男生"].map((g) => (
+                                <button key={g} type="button" onClick={() => setGenderLimit(g)} className={`px-3 py-1.5 rounded-full text-xs font-black border ${genderLimit === g ? "bg-black text-white border-transparent" : "bg-white text-slate-600 border-slate-200"}`}>
+                                  {g}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-xs font-black text-slate-500">学历限制</div>
+                            <div className="flex flex-wrap gap-2">
+                              {["不限", "本科", "研究生", "博士"].map((i) => (
+                                <button key={i} type="button" onClick={() => setIdentityLimit(i)} className={`px-3 py-1.5 rounded-full text-xs font-black border ${identityLimit === i ? "bg-black text-white border-transparent" : "bg-white text-slate-600 border-slate-200"}`}>
+                                  {i}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-white">
+                            <span className="text-sm font-black text-slate-700">仅限认证校友</span>
+                            <input type="checkbox" checked={isVerifiedOnly} onChange={(e) => setIsVerifiedOnly(e.target.checked)} />
+                          </label>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => { resetCreateDraft(); setShowCreateModal(false); }} className="px-6 h-12 rounded-2xl bg-slate-200 text-slate-600 font-black">
+                      取消
+                    </button>
+                    <button type="submit" disabled={isLoading} className={`flex-1 h-12 rounded-2xl font-black text-white ${theme.primary} disabled:opacity-60`}>
+                      {isLoading ? "发布中..." : "发布活动"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 右侧：校区场景选择 */}
+                <div className="col-span-1 lg:col-span-5 space-y-4 lg:pl-10 lg:border-l lg:border-slate-200/50">
+                  <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-6">校区场景</div>
+                  <div className="grid grid-cols-2 gap-4 lg:gap-6">
+                    {scenes.map((scene) => {
+                      const isActive = activeScene === scene.id;
+                      return (
+                        <button
+                          key={scene.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveScene(scene.id);
+                            setActivityDraft((p) => ({ ...p, location: scene.id }));
+                          }}
+                          className={`relative aspect-[4/3] rounded-[2rem] p-5 flex flex-col justify-end overflow-hidden transition-all duration-300 active:scale-[0.98] ${isActive ? `bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-[1.5px] ${theme.primaryBorder}` : "bg-white/50 backdrop-blur-sm border-[1.5px] border-transparent hover:bg-white/80"}`}
+                        >
+                          <div className={`absolute inset-0 flex items-center justify-center pb-6 transition-transform duration-500 ${isActive ? "scale-105" : "scale-100"}`}>
+                            <div className={`w-20 h-20 lg:w-28 lg:h-28 transition-colors duration-300 ${isActive ? theme.primaryText : "text-slate-300"}`}>
+                              {scene.svg}
+                            </div>
+                          </div>
+                          <div className={`relative z-10 text-left text-[13px] font-black tracking-wider transition-colors ${isActive ? "text-slate-900" : "text-slate-400"}`}>{scene.id}</div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-
-                <div className="text-xs text-gray-500 font-bold leading-relaxed">
-                  这些信息会在加入前展示，帮助同学判断是否合适，减少尴尬。
-                </div>
-              </div>
-            )}
-
-            {createStep === 3 && (
-              <div className="flex flex-col gap-4">
-                <div className="text-sm font-black">发起人态度（帮助大家安心加入）</div>
-
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { k: "welcome_first_timer", t: "欢迎第一次参加搭子" },
-                    { k: "welcome_solo", t: "欢迎一个人来" },
-                    { k: "chat_before_decide", t: "可以先聊再决定" },
-                    { k: "will_reply", t: "我会在活动内回复" },
-                    { k: "no_gender_mind", t: "不介意不同性别/专业" },
-                  ].map(it => {
-                    const on = reqDraft.host_flags.includes(it.k);
-                    return (
-                      <button type="button" key={it.k}
-                        onClick={() => toggleInList("host_flags", it.k, 6)}
-                        className={`px-4 py-2 rounded-xl text-sm font-black border ${on ? "bg-black text-white" : "bg-white text-gray-600"}`}
-                      >
-                        {it.t}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="bg-gray-50 rounded-2xl p-4">
-                  <div className="text-xs font-black text-gray-500 mb-2">预览（加入前会看到）</div>
-                  <div className="text-sm font-black">门槛与态度摘要</div>
-                  <div className="text-xs text-gray-600 font-bold mt-2">
-                    性别：{reqDraft.gender === "any" ? "不限" : reqDraft.gender === "female_only" ? "仅女生" : "仅男生"}；
-                    陌生人：{reqDraft.stranger === "ok" ? "完全OK" : reqDraft.stranger === "new_friends" ? "想认识新朋友" : "有熟人圈但欢迎加入"}；
-                    氛围：{reqDraft.vibe.length ? reqDraft.vibe.join("、") : "未指定"}。
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 mt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  if (createStep === 1) { resetCreateDraft(); setShowCreateModal(false); }
-                  else setCreateStep(s => (s === 3 ? 2 : 1));
-                }}
-                className="flex-1 py-3 rounded-xl font-black text-sm bg-gray-100 text-gray-700 active:scale-95"
-              >
-                {createStep === 1 ? "取消" : "上一步"}
-              </button>
-
-              {createStep < 3 ? (
-                <button
-                  type="button"
-                  onClick={() => { normalizePeople(); setCreateStep(s => (s === 1 ? 2 : 3)); }}
-                  className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95"
-                >
-                  下一步
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex-1 py-3 rounded-xl font-black text-sm bg-black text-white active:scale-95 disabled:opacity-60"
-                >
-                  {isLoading ? "发布中..." : "发布活动"}
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {roomOpen && roomActivity && (
-        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} onJump={handleSquareJump} highlightMsgId={targetMsgId} />
+        <RoomModal activity={roomActivity} currentUser={currentUser} onClose={closeRoom} onJump={handleSquareJump} highlightMsgId={targetMsgId} theme={theme} />
       )}
 
       {posterTarget && <PosterModal activity={posterTarget} onClose={() => setPosterTarget(null)} />}
@@ -2559,12 +2572,14 @@ function RoomModal({
   onClose,
   onJump,
   highlightMsgId,
+  theme,
 }: {
   activity: Activity;
   currentUser: string;
   onClose: () => void;
   onJump?: (id: string, msgId?: string) => void;
   highlightMsgId?: string;
+  theme: ThemePalette;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -2590,6 +2605,118 @@ function RoomModal({
     (!!activity &&
       !!currentUser &&
       (activity.author === currentUser || joined.includes(currentUser)));
+
+  const squareSkins: Record<
+    ThemeKey,
+    {
+      root: string;
+      header: string;
+      iconWrap: string;
+      title: string;
+      sub: string;
+      close: string;
+      tip: string;
+      avatar: string;
+      shareCard: string;
+      shareTag: string;
+      shareBtn: string;
+      myBubble: string;
+      otherBubble: string;
+      inputWrap: string;
+      imageBtn: string;
+      textarea: string;
+      sendBtn: string;
+    }
+  > = {
+    fairy: {
+      root: "bg-gradient-to-b from-[#EAF7FF] via-[#F2E3C6] to-white text-slate-900",
+      header: "bg-white/80 border-[#0095D9]/20",
+      iconWrap: "bg-gradient-to-tr from-[#0095D9] to-[#4EC8FF] border-[#0095D9]/30",
+      title: "text-slate-900",
+      sub: "text-[#0095D9]",
+      close: "bg-white/70 border-[#0095D9]/20 text-[#0095D9] hover:bg-white",
+      tip: "bg-white/70 border-[#0095D9]/20 text-[#0095D9]",
+      avatar: "bg-white/90 border-[#0095D9]/20 text-[#0095D9]",
+      shareCard: "bg-white/90 border-[#0095D9]/20 text-slate-900",
+      shareTag: "bg-[#0095D9]/10 text-[#0095D9]",
+      shareBtn: "bg-gradient-to-r from-[#0095D9] to-[#FF4C00] text-white",
+      myBubble: "bg-gradient-to-r from-[#0095D9] to-[#FF4C00] border-transparent text-white rounded-tr-none",
+      otherBubble: "bg-white/90 text-slate-900 border-[#0095D9]/20 rounded-tl-none",
+      inputWrap: "bg-white/85 border-[#0095D9]/20",
+      imageBtn: "bg-white/80 border-[#0095D9]/20 text-[#0095D9]",
+      textarea: "bg-white/80 border-[#0095D9]/20 text-slate-800 placeholder-slate-400",
+      sendBtn: "bg-gradient-to-r from-[#0095D9] to-[#FF4C00] text-white shadow-[#0095D9]/20",
+    },
+    forest: {
+      root: "bg-gradient-to-b from-[#ECF8EA] via-[#FCF5E2] to-white text-slate-900",
+      header: "bg-white/85 border-[#0C8918]/20",
+      iconWrap: "bg-gradient-to-tr from-[#0C8918] to-[#4DBA55] border-[#0C8918]/30",
+      title: "text-slate-900",
+      sub: "text-[#0C8918]",
+      close: "bg-white/70 border-[#0C8918]/20 text-[#0C8918] hover:bg-white",
+      tip: "bg-white/75 border-[#0C8918]/20 text-[#0C8918]",
+      avatar: "bg-white/90 border-[#0C8918]/20 text-[#0C8918]",
+      shareCard: "bg-white/90 border-[#0C8918]/20 text-slate-900",
+      shareTag: "bg-[#0C8918]/10 text-[#0C8918]",
+      shareBtn: "bg-gradient-to-r from-[#0C8918] to-[#FCC96E] text-[#103014]",
+      myBubble: "bg-gradient-to-r from-[#0C8918] to-[#7BBE4A] border-transparent text-white rounded-tr-none",
+      otherBubble: "bg-white/90 text-slate-900 border-[#0C8918]/20 rounded-tl-none",
+      inputWrap: "bg-white/85 border-[#0C8918]/20",
+      imageBtn: "bg-white/80 border-[#0C8918]/20 text-[#0C8918]",
+      textarea: "bg-white/80 border-[#0C8918]/20 text-slate-800 placeholder-slate-400",
+      sendBtn: "bg-gradient-to-r from-[#0C8918] to-[#FCC96E] text-[#103014] shadow-[#0C8918]/20",
+    },
+    british: {
+      root: "bg-gradient-to-b from-[#120D0C] via-[#1A1311] to-[#0F0B0A] text-[#F2E3C6]",
+      header: "bg-[#221815]/85 border-[#C18F4E]/25",
+      iconWrap: "bg-gradient-to-tr from-[#4A010A] to-[#7A1120] border-[#C18F4E]/35",
+      title: "text-[#F2E3C6]",
+      sub: "text-[#C18F4E]",
+      close: "bg-[#2A1F1B]/80 border-[#C18F4E]/25 text-[#C18F4E] hover:bg-[#312520]",
+      tip: "bg-[#2A1F1B]/80 border-[#C18F4E]/25 text-[#C18F4E]",
+      avatar: "bg-[#312520] border-[#C18F4E]/25 text-[#C18F4E]",
+      shareCard: "bg-[#312520]/95 border-[#C18F4E]/25 text-[#F2E3C6]",
+      shareTag: "bg-[#C18F4E]/20 text-[#F7D8A3]",
+      shareBtn: "bg-gradient-to-r from-[#4A010A] to-[#C18F4E] text-[#F2E3C6]",
+      myBubble: "bg-gradient-to-r from-[#4A010A] to-[#7A1120] border-transparent text-[#F2E3C6] rounded-tr-none",
+      otherBubble: "bg-[#312520]/95 text-[#F2E3C6] border-[#C18F4E]/25 rounded-tl-none",
+      inputWrap: "bg-[#1B1412]/95 border-[#C18F4E]/20",
+      imageBtn: "bg-[#2A1F1B]/80 border-[#C18F4E]/25 text-[#C18F4E]",
+      textarea: "bg-[#2A1F1B]/80 border-[#C18F4E]/20 text-[#F2E3C6] placeholder-[#C8B598]/45",
+      sendBtn: "bg-gradient-to-r from-[#4A010A] to-[#C18F4E] text-[#F2E3C6] shadow-[#4A010A]/30",
+    },
+  };
+  const squareSkin = squareSkins[theme.id as ThemeKey] ?? squareSkins.fairy;
+
+  const roomSkin = {
+    fairy: {
+      panelBg: "bg-[#EAF4FF]",
+      closeBtn: "bg-white/80 border-white/60 text-gray-500",
+      shareBtn: "bg-[#FF4C00]/12 border-[#FF4C00]/35 text-[#FF4C00]",
+      headerCard: "bg-gradient-to-r from-[#0095D9] to-[#4EC8FF] text-white border-white/20",
+      seatBg: "bg-gradient-to-b from-[#EAF7FF] via-[#F2E3C6]/45 to-white",
+      avatarOther: "bg-gradient-to-tr from-[#E6F4FF] to-[#F4FBFF] text-[#0095D9] shadow-md shadow-[#0095D9]/15",
+      enterBtn: "bg-[#0095D9] text-white",
+    },
+    forest: {
+      panelBg: "bg-[#F3FAED]",
+      closeBtn: "bg-white/80 border-white/60 text-gray-600",
+      shareBtn: "bg-[#0C8918]/12 border-[#0C8918]/35 text-[#0C8918]",
+      headerCard: "bg-gradient-to-r from-[#0C8918] to-[#58B861] text-white border-white/20",
+      seatBg: "bg-gradient-to-b from-[#ECF8EA] via-[#FCF5E2]/65 to-white",
+      avatarOther: "bg-gradient-to-tr from-[#E8F7EA] to-[#F6FCF6] text-[#0C8918] shadow-md shadow-[#0C8918]/15",
+      enterBtn: "bg-[#0C8918] text-white",
+    },
+    british: {
+      panelBg: "bg-[#171210]",
+      closeBtn: "bg-[#2A1F1B]/80 border-[#C18F4E]/20 text-[#C18F4E]",
+      shareBtn: "bg-[#C18F4E]/12 border-[#C18F4E]/35 text-[#C18F4E]",
+      headerCard: "bg-gradient-to-r from-[#4A010A] to-[#7A1120] text-[#F2E3C6] border-[#C18F4E]/25",
+      seatBg: "bg-gradient-to-b from-[#1C1513] via-[#241A17] to-[#2E221D]",
+      avatarOther: "bg-gradient-to-tr from-[#3A2B26] to-[#2C211D] text-[#C18F4E] shadow-md shadow-black/35",
+      enterBtn: "bg-[#C18F4E] text-[#3A2016]",
+    },
+  }[theme.id as ThemeKey];
 
   const SEAT_COUNT = 8;
   const seatedUsers = (() => {
@@ -2801,32 +2928,32 @@ function RoomModal({
   // ==================================================================================
   if (isGlobalSquare) {
     return (
-      <div className="fixed inset-0 z-[999] bg-gradient-to-b from-[#961A1A] via-[#7A1212] to-[#3D0606] flex flex-col animate-fade-in text-[#FFFBEB] font-sans">
-        <div className="bg-[#7A1212]/90 backdrop-blur-md px-4 py-3 shadow-lg border-b border-orange-900/30 flex items-center justify-between sticky top-0 z-10">
+      <div className={`fixed inset-0 z-[999] flex flex-col animate-fade-in font-sans ${squareSkin.root}`}>
+        <div className={`backdrop-blur-md px-4 py-3 shadow-lg border-b flex items-center justify-between sticky top-0 z-10 ${squareSkin.header}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-red-600 flex items-center justify-center text-2xl shadow-md border border-orange-400/30">
-              🏮
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-2xl shadow-md border ${squareSkin.iconWrap}`}>
+              🌍
             </div>
             <div>
-              <div className="font-black text-base text-orange-50">新春聊天大集市</div>
-              <div className="text-[10px] font-bold text-orange-300 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              <div className={`font-black text-base ${squareSkin.title}`}>聊天大广场</div>
+              <div className={`text-[10px] font-bold flex items-center gap-1 ${squareSkin.sub}`}>
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
                 全服热聊中 · 消息保留24h
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 bg-red-950/40 border border-orange-900/20 rounded-full flex items-center justify-center text-orange-200/80 font-bold active:scale-90 transition-transform hover:bg-red-900/60"
+            className={`w-9 h-9 border rounded-full flex items-center justify-center font-bold active:scale-90 transition-transform ${squareSkin.close}`}
           >
             ✕
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-orange-900/50 scrollbar-track-transparent">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="text-center py-4">
-            <span className="text-[10px] bg-red-950/40 border border-orange-900/20 text-orange-300/80 px-4 py-1.5 rounded-full font-bold">
-              🧨 过年好！请文明发言，共创和谐氛围
+            <span className={`text-[10px] border px-4 py-1.5 rounded-full font-bold ${squareSkin.tip}`}>
+              请文明发言，共创和谐氛围
             </span>
           </div>
 
@@ -2844,15 +2971,15 @@ function RoomModal({
                 >
                   {!mine && (
                     <div
-                      className="w-8 h-8 rounded-full bg-red-950/50 border border-orange-900/30 text-orange-300 flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                      className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer ${squareSkin.avatar}`}
                       onClick={() => handleAvatarClick(m.sender)}
                     >
                       {m.sender[0]}
                     </div>
                   )}
-                  <div className="bg-[#FFFBF0] p-3 rounded-2xl shadow-md border border-orange-200 max-w-[260px] text-gray-900">
+                  <div className={`p-3 rounded-2xl shadow-md border max-w-[260px] ${squareSkin.shareCard}`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded">活动召集</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded ${squareSkin.shareTag}`}>活动召集</span>
                       <span className="text-[10px] font-bold text-gray-500">by {m.sender}</span>
                     </div>
                     <div className="font-black text-sm mb-1">{act.title}</div>
@@ -2863,7 +2990,7 @@ function RoomModal({
                     </div>
                     <button
                       onClick={() => onJump?.(act.id)}
-                      className="w-full py-2 bg-gradient-to-r from-orange-600 to-red-700 text-white text-xs font-black rounded-xl active:opacity-90 shadow-sm"
+                      className={`w-full py-2 text-xs font-black rounded-xl active:opacity-90 shadow-sm ${squareSkin.shareBtn}`}
                     >
                       立即查看 / 加入 🚀
                     </button>
@@ -2881,7 +3008,7 @@ function RoomModal({
                 >
                   {!mine && (
                     <div
-                      className="w-8 h-8 rounded-full bg-white/90 border border-red-100 text-red-800 shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                      className={`w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer ${squareSkin.avatar}`}
                       onClick={() => handleAvatarClick(m.sender)}
                     >
                       {m.sender[0]}
@@ -2892,7 +3019,7 @@ function RoomModal({
                     <img
                       src={m.text}
                       alt="图片"
-                      className="max-w-[200px] max-h-[300px] rounded-2xl border-2 border-orange-200 shadow-md object-cover bg-black/20"
+                      className="max-w-[200px] max-h-[300px] rounded-2xl border-2 border-white/20 shadow-md object-cover bg-black/20"
                       onClick={() => window.open(m.text)}
                     />
                   </div>
@@ -2909,7 +3036,7 @@ function RoomModal({
                 {!mine && (
                   <div
                     onClick={() => handleAvatarClick(m.sender)}
-                    className="w-8 h-8 rounded-full bg-white/90 border border-red-100 text-red-800 shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer"
+                    className={`w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-xs font-black mr-2 mt-1 shrink-0 cursor-pointer ${squareSkin.avatar}`}
                   >
                     {m.sender[0]}
                   </div>
@@ -2917,11 +3044,11 @@ function RoomModal({
                 <div
                   className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm border ${
                     mine
-                      ? "bg-gradient-to-r from-orange-600 to-red-700 border-transparent text-orange-50 rounded-tr-none shadow-orange-900/20"
-                      : "bg-[#FFFBF0] text-red-950 border-red-50 rounded-tl-none"
+                      ? squareSkin.myBubble
+                      : squareSkin.otherBubble
                   }`}
                 >
-                  {!mine && <div className="text-[10px] font-bold text-red-900/50 mb-0.5">{m.sender}</div>}
+                  {!mine && <div className="text-[10px] font-bold text-gray-500 mb-0.5">{m.sender}</div>}
                   <div className="text-[14px] font-medium leading-relaxed break-words whitespace-pre-wrap">
                     {m.text}
                   </div>
@@ -2932,7 +3059,7 @@ function RoomModal({
           <div ref={msgEndRef} className="h-4" />
         </div>
 
-        <div className="bg-[#3D0606] px-4 py-3 border-t border-orange-900/30 pb-safe relative z-20">
+        <div className={`px-4 py-3 border-t pb-safe relative z-20 ${squareSkin.inputWrap}`}>
           <input
             type="file"
             accept="image/*"
@@ -2943,16 +3070,16 @@ function RoomModal({
           <div className="flex gap-2 items-end">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-11 h-11 rounded-2xl bg-red-950/60 border border-orange-900/30 text-orange-200 flex items-center justify-center active:scale-95"
+              className={`w-11 h-11 rounded-2xl border flex items-center justify-center active:scale-95 ${squareSkin.imageBtn}`}
             >
               <ImageIcon size={20} />
             </button>
             <textarea
               value={chatText}
               onChange={(e) => setChatText(e.target.value)}
-              placeholder="说句吉祥话..."
+              placeholder="说点什么..."
               rows={1}
-              className="flex-1 bg-red-950/40 border border-orange-900/20 rounded-2xl px-4 py-3 font-bold text-sm text-orange-50 placeholder-orange-300/40 outline-none resize-none min-h-[44px] max-h-[120px] focus:border-orange-500/50 transition-colors"
+              className={`flex-1 border rounded-2xl px-4 py-3 font-bold text-sm outline-none resize-none min-h-[44px] max-h-[120px] transition-colors ${squareSkin.textarea}`}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -2964,7 +3091,7 @@ function RoomModal({
               type="button"
               onClick={sendChat}
               disabled={chatLoading || !chatText.trim()}
-              className="w-12 h-11 rounded-2xl bg-gradient-to-r from-orange-500 to-red-600 text-white flex items-center justify-center disabled:opacity-50 disabled:grayscale active:scale-95 transition-all shadow-md shadow-orange-900/20"
+              className={`w-12 h-11 rounded-2xl flex items-center justify-center disabled:opacity-50 disabled:grayscale active:scale-95 transition-all shadow-md ${squareSkin.sendBtn}`}
             >
               <SendIcon />
             </button>
@@ -3036,18 +3163,18 @@ function RoomModal({
   // 普通房间
   return (
     <div className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="absolute inset-x-0 top-0 bottom-0 bg-[#EAF2FF] flex flex-col sm:max-w-md sm:mx-auto animate-slide-up">
+      <div className={`absolute inset-x-0 top-0 bottom-0 flex flex-col sm:max-w-md sm:mx-auto animate-slide-up ${roomSkin.panelBg}`}>
         <div className="flex items-center justify-between px-4 pt-4">
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-white/80 border border-white/60 flex items-center justify-center font-black text-gray-500 active:scale-95"
+            className={`w-10 h-10 rounded-full border flex items-center justify-center font-black active:scale-95 ${roomSkin.closeBtn}`}
           >
             ✕
           </button>
           <div className="flex items-center gap-2">
             <button
               onClick={handleShareToSquare}
-              className="h-8 px-3 rounded-full bg-orange-100 border border-orange-200 text-orange-600 text-[10px] font-black flex items-center gap-1 active:scale-95"
+              className={`h-8 px-3 rounded-full border text-[10px] font-black flex items-center gap-1 active:scale-95 ${roomSkin.shareBtn}`}
             >
               <Share2 size={12} /> 转发到广场
             </button>
@@ -3058,14 +3185,14 @@ function RoomModal({
         </div>
 
         <div className="px-4 mt-3 mb-4">
-          <div className="bg-gradient-to-r from-[#2D5BFF] to-[#4CA6FF] text-white rounded-3xl px-5 py-4 shadow-lg border border-white/20 relative overflow-hidden">
+          <div className={`rounded-3xl px-5 py-4 shadow-lg border relative overflow-hidden ${roomSkin.headerCard}`}>
             <div className="text-[11px] font-black opacity-90">房主：{host}</div>
             <div className="text-2xl font-black mt-1 leading-tight">{title}</div>
             <div className="text-[12px] font-bold opacity-90 mt-1 line-clamp-2">{activity.description || "暂无描述"}</div>
           </div>
         </div>
 
-        <div className="relative flex-1 px-4 overflow-y-auto pb-24 bg-gradient-to-b from-blue-50 via-purple-50/50 to-white rounded-t-3xl">
+        <div className={`relative flex-1 px-4 overflow-y-auto pb-24 rounded-t-3xl ${roomSkin.seatBg}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-black text-gray-700">房间座位 ({seatedUsers.length}/{SEAT_COUNT})</div>
             {memberLoading && (
@@ -3101,7 +3228,7 @@ function RoomModal({
                         ? "bg-white/20 text-gray-400/70"
                         : isMe
                           ? "bg-gradient-to-tr from-gray-800 to-black text-white shadow-lg shadow-black/20"
-                          : "bg-gradient-to-tr from-blue-100 to-blue-50 text-blue-600 shadow-md shadow-blue-200/50"
+                          : roomSkin.avatarOther
                     }`}>
                       {u ? u[0].toUpperCase() : "+"}
                     </div>
@@ -3129,7 +3256,7 @@ function RoomModal({
           <button
             onClick={() => { if (canChat) setShowChat(true); }}
             disabled={!canChat}
-            className={`flex-1 py-4 rounded-2xl font-black text-sm transition active:scale-95 ${canChat ? "bg-black text-white" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
+            className={`flex-1 py-4 rounded-2xl font-black text-sm transition active:scale-95 ${canChat ? roomSkin.enterBtn : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
           >
             {canChat ? "进入聊天" : "加入后可聊"}
           </button>
